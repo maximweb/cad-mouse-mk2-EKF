@@ -1,6 +1,3 @@
-// Uncomment to avoid HID output but return values over Serial for testing
-#define DEVELOPMENT_MODE 1
-
 // Pins as defined in the original project
 #define PIN_RIGHT_BTN D0
 #define PIN_LEFT_BTN D2
@@ -54,7 +51,10 @@
 #define ISOLATION_POWER 3.0f // Power for curved isolation (3.0f -> cubic isolation); while being a float, only 1, 2, 3, and 0.5 are optimized for RP2350 hardware. Other values will be slow.
 
 // Calibration
+#define CALIBRATION_DATA_STD_THRESHOLD 0.5f // Standard deviation threshold to accept collected raw data samples for calibration
+
 #define CALIBRATION_FIT_MOMENT_BOUNDS 0.5f // bounds for magnetic moment fitting in A/m^2
+#define CALIBRATION_FIT_MOMENT_MIN 0.05f   // minimum magnetic moment to accept in A/m^2
 
 #define CALIBRATION_FIT_X_MIN -1.0f  // lower bound for x offset fitting in mm
 #define CALIBRATION_FIT_X_MAX 1.0f   // upper bound for x offset fitting in mm
@@ -74,6 +74,7 @@
 
 // Debugging via Serial
 // Uncomment any of the following lines to enable serial debug output for the corresponding module
+// #define _MAIN_SERIAL_DEBUG 1
 // #define _STATE_MACHINE_SERIAL_DEBUG 1
 // #define _CALIBRATION_SERIAL_DEBUG 1
 // #define _DIPOLE_MODEL_SERIAL_DEBUG 1
