@@ -188,7 +188,7 @@ bool Calibration::compute_calibration(float magnetic_moments[3], float offsets[6
     get_current_stds(stds);
     bool high_std_detected = false;
     for (int i = 0; i < 9; ++i) {
-        if (stds[i] > 0.5f) {
+        if (stds[i] > CALIBRATION_DATA_STD_THRESHOLD) {
             high_std_detected = true;
         }
     }
@@ -307,7 +307,7 @@ bool Calibration::compute_calibration(float magnetic_moments[3], float offsets[6
     }
     bool moments_too_small[3] = {false, false, false};
     for (int i = 0; i < 3; ++i) {
-        if (fabs(fitted_magnetic_moments[i]) < 0.05f) { // Arbitrary threshold for too small magnetic moment
+        if (fabs(fitted_magnetic_moments[i]) < CALIBRATION_FIT_MOMENT_MIN) { // Arbitrary threshold for too small magnetic moment
             moments_too_small[i] = true;
         }
     }
@@ -397,22 +397,22 @@ bool Calibration::compute_calibration(float magnetic_moments[3], float offsets[6
 bool Calibration::initialize_filesystem()
 {
     if (!LittleFS.begin()) {
-#ifdef DEVELOPMENT_MODE
+#ifdef _CALIBRATION_SERIAL_DEBUG
         Serial.println("Failed to mount LittleFS, attempting to format...");
 #endif
         if (LittleFS.format()) {
-#ifdef DEVELOPMENT_MODE
+#ifdef _CALIBRATION_SERIAL_DEBUG
             Serial.println("LittleFS formatted successfully.");
 #endif
         }
         else {
-#ifdef DEVELOPMENT_MODE
+#ifdef _CALIBRATION_SERIAL_DEBUG
             Serial.println("Failed to format LittleFS.");
 #endif
             return false;
         }
         if (!LittleFS.begin()) {
-#ifdef DEVELOPMENT_MODE
+#ifdef _CALIBRATION_SERIAL_DEBUG
             Serial.println("Failed to mount LittleFS after formatting");
 #endif
             return false;
@@ -425,7 +425,7 @@ bool Calibration::save_calibration_data(const CalibrationData& data)
 {
     File file = LittleFS.open("/calibration.bin", "w");
     if (!file) {
-#ifdef DEVELOPMENT_MODE
+#ifdef _CALIBRATION_SERIAL_DEBUG
         Serial.println("Failed to open calibration data file for writing");
 #endif
         return false;
@@ -437,7 +437,7 @@ bool Calibration::save_calibration_data(const CalibrationData& data)
     file.close();
 
     if (written != sizeof(CalibrationData)) {
-#ifdef DEVELOPMENT_MODE
+#ifdef _CALIBRATION_SERIAL_DEBUG
         Serial.println("Failed to write complete calibration data");
 #endif
         return false;
@@ -450,7 +450,7 @@ bool Calibration::load_calibration_data(CalibrationData& data)
 {
     File file = LittleFS.open("/calibration.bin", "r");
     if (!file) {
-#ifdef DEVELOPMENT_MODE
+#ifdef _CALIBRATION_SERIAL_DEBUG
         Serial.println("Failed to open calibration data file for reading");
 #endif
         return false;
@@ -460,7 +460,7 @@ bool Calibration::load_calibration_data(CalibrationData& data)
     file.close();
 
     if (read != sizeof(CalibrationData)) {
-#ifdef DEVELOPMENT_MODE
+#ifdef _CALIBRATION_SERIAL_DEBUG
         Serial.println("Failed to read complete calibration data");
 #endif
         return false;
@@ -473,7 +473,7 @@ bool Calibration::delete_calibration_data()
 {
     if (LittleFS.exists("/calibration.bin")) {
         if (!LittleFS.remove("/calibration.bin")) {
-#ifdef DEVELOPMENT_MODE
+#ifdef _CALIBRATION_SERIAL_DEBUG
             Serial.println("Failed to delete calibration data file");
 #endif
             return false;

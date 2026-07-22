@@ -1,5 +1,7 @@
 #pragma once
 
+#include "config.h"
+
 #include <Arduino.h>
 
 // Uncomment the following line to enable serial debug output for the DipoleModel class

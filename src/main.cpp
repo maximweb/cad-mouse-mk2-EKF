@@ -13,6 +13,10 @@
 #include "normalization.h"
 #include "state_machine.h"
 
+#ifdef _MAIN_SERIAL_DEBUG
+#include "helpers.h"
+#endif
+
 /*
     GLOBAL OBJECTS
 */
@@ -101,7 +105,9 @@ void loop()
         case StateMachine::State::CHECK_SENSORS: {
             // Check if the hall sensors are delivering valid data
             sensor_status = hallController.read(rawSensorData);
-            // print_raw_sensor_data(rawSensorData);
+#ifdef _MAIN_SERIAL_DEBUG
+            Helpers::print_raw_sensor_data(rawSensorData);
+#endif
 
             stateMachine.handle_CHECK_SENSORS(sensor_status);
             break;
@@ -177,43 +183,21 @@ void loop()
                     latest_estimated_state[10] = sharedFilteredData.vry;
                     latest_estimated_state[11] = sharedFilteredData.vrz;
 
-                    // TODO: Timing tests
-                    // float dt_ms = sharedFilteredData.dt * 1e3;
-                    // Serial.print("Filter DT: ");
-                    // Serial.printf("%.3f", dt_ms);
-                    // Serial.println(" ms");
+#ifdef _MAIN_SERIAL_DEBUG
+                    // Print roundtrip time between consecutive readings->filtering->return
+                    // Implies frequency of HID updates must be less than this
+                    float dt_ms = sharedFilteredData.dt * 1e3;
+                    Serial.print("Filter DT: ");
+                    Serial.printf("%.3f", dt_ms);
+                    Serial.println(" ms");
+#endif
 
-                    // // Condensed output
-                    // Serial.print(latest_estimated_state[0], 3);
-                    // Serial.print(",");
-                    // Serial.print(latest_estimated_state[1], 3);
-                    // Serial.print(",");
-                    // Serial.print(latest_estimated_state[2], 3);
-                    // Serial.print("  ,  ");
-                    // Serial.print(latest_estimated_state[3], 3);
-                    // Serial.print(",");
-                    // Serial.print(latest_estimated_state[4], 3);
-                    // Serial.print(",");
-                    // Serial.print(latest_estimated_state[5], 3);
-                    // Serial.print("  ,  ");
-                    // // Serial.print(latest_estimated_state[6], 3);
-                    // Serial.printf("%.3e", latest_estimated_state[6]);
-                    // Serial.print(",");
-                    // // Serial.print(latest_estimated_state[7], 3);
-                    // Serial.printf("%.3e", latest_estimated_state[7]);
-                    // Serial.print(",");
-                    // // Serial.print(latest_estimated_state[8], 3);
-                    // Serial.printf("%.3e", latest_estimated_state[8]);
-                    // Serial.print("  ,  ");
-                    // // Serial.print(latest_estimated_state[9], 3);
-                    // Serial.printf("%.3e", latest_estimated_state[9]);
-                    // Serial.print(",");
-                    // // Serial.print(latest_estimated_state[10], 3);
-                    // Serial.printf("%.3e", latest_estimated_state[10]);
-                    // Serial.print(",");
-                    // // Serial.println(latest_estimated_state[11], 3);
-                    // Serial.printf("%.3e", latest_estimated_state[11]);
-                    // Serial.println();
+#ifdef _MAIN_SERIAL_DEBUG
+                    // Print the latest estimated state for debugging
+                    Helpers::print_estimated_state(latest_estimated_state);
+                    // Condensed print for debugging
+                    // Helpers::print_condensed_estimated_state(latest_estimated_state);
+#endif
                 }
 
                 // Send new data to Core 1
