@@ -1,3 +1,5 @@
+#include "config.h"
+
 #include "normalization.h"
 
 namespace {
@@ -54,8 +56,16 @@ void Normalization::apply_normalization_deadzone_isolation(float state[12], floa
     // Per DoF Limits for normalization
     // We allow individual limits, as spring might behave differently for x,y vs z and rx,ry vs rz.
     // Yet for now, we will use the same limits for translation and rotation.
-    const float translation_limits[3] = {2.0f, 2.0f, 2.0f};                                                                         // mm
-    const float rotation_limits[3] = {7.0f * (3.14159265f / 180.0f), 7.0f * (3.14159265f / 180.0f), 7.0f * (3.14159265f / 180.0f)}; // radians
+    const float translation_limits[3] = {
+      NORMALIZATION_X_MAX,
+      NORMALIZATION_Y_MAX,
+      NORMALIZATION_Z_MAX,
+    }; // mm
+    const float rotation_limits[3] = {
+      NORMALIZATION_RX_MAX * (3.14159265f / 180.0f),
+      NORMALIZATION_RY_MAX * (3.14159265f / 180.0f),
+      NORMALIZATION_RZ_MAX * (3.14159265f / 180.0f),
+    }; // radians
 
     // == Normalize translation and rotation values to [-1, 1] range
     // Use same normalization for the velocities as well.
@@ -76,8 +86,8 @@ void Normalization::apply_normalization_deadzone_isolation(float state[12], floa
     // Treat translation and rotation separately, as they may have different deadzone thresholds.
     // Use magnitude of translation and rotation vectors to determine if they are within the deadzone.
     // Velocities are also zeroed out if the corresponding translation or rotation is within the deadzone, to prevent drift.
-    const float translation_deadzone_threshold = 0.05f;
-    const float rotation_deadzone_threshold = 0.05f;
+    const float translation_deadzone_threshold = DEADZONE_TRANSLATION_THRESHOLD;
+    const float rotation_deadzone_threshold = DEADZONE_ROTATION_THRESHOLD;
 
     apply_3d_deadzone_coupled(&normalized_state[0], &normalized_state[6], translation_deadzone_threshold, 1.0f);
     apply_3d_deadzone_coupled(&normalized_state[3], &normalized_state[9], rotation_deadzone_threshold, 1.0f);
@@ -101,7 +111,7 @@ void Normalization::apply_normalization_deadzone_isolation(float state[12], floa
 
     // Handle power curve for isolation.
     // WARNING: Only values of 1, 2, 3, and 0.5 are optimized for RP2350 hardware. Other values will be slow.
-    const float power = 3.0f; // Power curve for isolation, higher values increase isolation effect
+    const float power = ISOLATION_POWER;
 
     float clamped_mag_6dof = (mag_6dof > 1.0f) ? 1.0f : mag_6dof; // Clamp to [0, 1] range
     float curved_mag_6dof = apply_power(clamped_mag_6dof, power);

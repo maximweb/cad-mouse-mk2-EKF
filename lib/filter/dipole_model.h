@@ -20,8 +20,13 @@ private:
     // scaled by 1e9 as positions are in mm, so we need to scale by 1e9 to convert m^3 to mm^3
     const float m_mu0_over_4pi = 1e-7 * 1e3f * 1e9;
 
-    float m_magnetic_moments[3] = {0.18f, 0.18f, 0.18f}; // Magnetic moments for each of the three magnets
-    float m_scaled_magnetic_moments[3];                  // Scaled magnetic moments for calculations
+    float m_magnetic_moments[3] = {
+      DIPOLE_MODEL_MAGNETIC_MOMENT_DEFAULT,
+      DIPOLE_MODEL_MAGNETIC_MOMENT_DEFAULT,
+      DIPOLE_MODEL_MAGNETIC_MOMENT_DEFAULT,
+    }; // Magnetic moments for each of the three magnets
+
+    float m_scaled_magnetic_moments[3]; // Scaled magnetic moments for calculations
 
     float m_offsets[6] = {0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f}; // Offsets for x, y, z, rx, ry, rz
 

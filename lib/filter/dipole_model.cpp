@@ -3,7 +3,11 @@
 #include "dipole_model.h"
 
 DipoleModel::DipoleModel()
-: m_scaled_magnetic_moments{m_mu0_over_4pi * m_magnetic_moments[0], m_mu0_over_4pi * m_magnetic_moments[1], m_mu0_over_4pi * m_magnetic_moments[2]}
+: m_scaled_magnetic_moments{
+    m_mu0_over_4pi * m_magnetic_moments[0],
+    m_mu0_over_4pi * m_magnetic_moments[1],
+    m_mu0_over_4pi * m_magnetic_moments[2],
+  }
 {
 }
 
