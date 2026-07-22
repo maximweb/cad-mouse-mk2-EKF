@@ -13,9 +13,8 @@ import serial
 from dash import Dash, Input, Output, State, dcc, html, no_update
 from plotly.subplots import make_subplots
 
-
 ROOT_DIR = Path(__file__).resolve().parents[2]
-DATA_DIR = ROOT_DIR / "data" / "calibration_data"
+DATA_DIR = ROOT_DIR / "calibration_data"
 DATA_DIR.mkdir(parents=True, exist_ok=True)
 
 CHANNELS = [
@@ -417,7 +416,9 @@ def update_plot(_n: int, history_minutes: float) -> tuple[go.Figure, str, str]:
     auto_msg = ""
     if (not active) and stop_reason == "auto" and last_file:
         auto_msg = f" | auto-saved={last_file}"
-    stats = f"buffer={len(rows)} | visible={len(df)} | recording={active} | recorded_samples={recorded}/{target}{auto_msg}"
+    stats = (
+        f"buffer={len(rows)} | visible={len(df)} | recording={active} | recorded_samples={recorded}/{target}{auto_msg}"
+    )
     return fig, stats, raw_text
 
 
