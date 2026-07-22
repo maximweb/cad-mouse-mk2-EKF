@@ -37,7 +37,6 @@ void HallSensorController::begin()
     m_sensor1.init(true, false, false, true);
     m_sensor1.setIICAddress(TLx493D_IIC_ADDR_A2_e);
     m_sensor1.setPowerMode(TLx493D_FAST_MODE_e);
-    // m_sensor1.setSensitivity(TLx493D_FULL_RANGE_e);
     m_sensor1.setSensitivity(m_sensitivity);
     delay(10); // Wait for the sensor to stabilize
 
@@ -45,7 +44,6 @@ void HallSensorController::begin()
     m_sensor2.init(true, false, false, true);
     m_sensor2.setIICAddress(TLx493D_IIC_ADDR_A1_e);
     m_sensor2.setPowerMode(TLx493D_FAST_MODE_e);
-    // m_sensor2.setSensitivity(TLx493D_FULL_RANGE_e);
     m_sensor2.setSensitivity(m_sensitivity);
     delay(10); // Wait for the sensor to stabilize
 
@@ -53,7 +51,6 @@ void HallSensorController::begin()
     m_sensor3.init(true, false, false, true);
     m_sensor3.setIICAddress(TLx493D_IIC_ADDR_A0_e);
     m_sensor3.setPowerMode(TLx493D_FAST_MODE_e);
-    // m_sensor3.setSensitivity(TLx493D_FULL_RANGE_e);
     m_sensor3.setSensitivity(m_sensitivity);
     delay(10); // Wait for the sensor to stabilize
 }
@@ -153,16 +150,9 @@ bool HallSensorController::readSingleSensorRawFast(uint8_t sensorAddress, int16_
     }
 
     // 5. Parse the valid 12-bit signed data
-    // BX LSB is in the upper nibble of b[4] (bits 7:4)
     *outX = static_cast<int16_t>((b[0] << 8) | (b[4] & 0xF0)) >> 4;
-
-    // BY LSB is in the lower nibble of b[4] (bits 3:0) -> shift to alignment
     *outY = static_cast<int16_t>((b[1] << 8) | ((b[4] & 0x0F) << 4)) >> 4;
-
-    // FIXED: BZ LSB is in the lower nibble of b[5] (bits 3:0) -> shift to alignment
     *outZ = static_cast<int16_t>((b[2] << 8) | ((b[5] & 0x0F) << 4)) >> 4;
-
-    return true;
 
     return true;
 }

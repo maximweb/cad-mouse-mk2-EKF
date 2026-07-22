@@ -19,7 +19,7 @@
 
 HallSensorController hallController = HallSensorController(PIN_MAG1_LS, PIN_MAG2_LS, PIN_MAG3_LS);
 LEDController ledController = LEDController(PIN_LED_LS, PIN_LED_DATA, LED_COUNT);
-DipoleModel dipoleModel = DipoleModel(); // Default magnetic moment of 0.18 A*m^2
+DipoleModel dipoleModel = DipoleModel();
 ExtendedKalmanFilter ekf = ExtendedKalmanFilter();
 ButtonController buttonController = ButtonController(PIN_LEFT_BTN, PIN_RIGHT_BTN);
 StateMachine stateMachine = StateMachine(ledController, dipoleModel);
@@ -298,7 +298,7 @@ void loop()
 void setup1()
 {
     const float initial_state[6] = {0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f}; // Initial pose: x, y, z, rx, ry, rz
-    ekf.init(initial_state, /* process_noise_std */ 1.0f, /* sensor_noise_std */ 5.0f);
+    ekf.init(initial_state, EKF_PROCESS_NOISE_STD, EKF_SENSOR_NOISE_STD);
 
     // Prime the engine: Push a fake complete token to kickstart Core 0's loop
     multicore_fifo_push_blocking(1); // 0 = Core 1 is idle and has never received any data
@@ -313,9 +313,6 @@ void loop1()
     if (trigger == 1) {
         return;
     }
-
-    // Update timing for dt
-    // uint32_t current_time_us = micros();
 
     static uint32_t last_time_us = 0;
     static bool is_first_run = true;

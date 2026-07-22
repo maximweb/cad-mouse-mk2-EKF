@@ -254,13 +254,17 @@ void StateMachine::handle_CALIBRATE_COMPUTE()
 bool StateMachine::change_state(State new_state)
 {
     if (new_state != m_state) {
-        // Serial.print("== State change: ");
-        // Serial.print(get_state_name());
-        // Serial.print(" -> ");
+#ifdef _STATE_MACHINE_SERIAL_DEBUG
+        Serial.print("== State change: ");
+        Serial.print(get_state_name());
+        Serial.print(" -> ");
+#endif
 
         m_state = new_state;
 
-        // Serial.println(get_state_name());
+#ifdef _STATE_MACHINE_SERIAL_DEBUG
+        Serial.println(get_state_name());
+#endif
 
         m_last_state_change_time_ms = millis();
 

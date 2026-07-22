@@ -229,8 +229,8 @@ bool Calibration::compute_calibration(float magnetic_moments[3], float offsets[6
 #endif
 
     // Bounded least squares optimization to refine magnetic_moments
-    float min_bounds[3] = {-0.5f, -0.5f, -0.5f}; // Lower bounds for magnetic moments
-    float max_bounds[3] = {0.5f, 0.5f, 0.5f};    // Upper bounds for magnetic moments
+    float min_bounds[3] = {-CALIBRATION_FIT_MOMENT_BOUNDS, -CALIBRATION_FIT_MOMENT_BOUNDS, -CALIBRATION_FIT_MOMENT_BOUNDS}; // Lower bounds for magnetic moments
+    float max_bounds[3] = {CALIBRATION_FIT_MOMENT_BOUNDS, CALIBRATION_FIT_MOMENT_BOUNDS, CALIBRATION_FIT_MOMENT_BOUNDS};    // Upper bounds for magnetic moments
     float fitted_magnetic_moments[3] = {old_magnetic_moments[0], old_magnetic_moments[1], old_magnetic_moments[2]};
     solve_least_squares(fitted_magnetic_moments, 3, means, calibrationModel, get_model_func_moments, min_bounds, max_bounds);
 
@@ -248,9 +248,24 @@ bool Calibration::compute_calibration(float magnetic_moments[3], float offsets[6
     calibrationModel.set_magnetic_moments(fitted_magnetic_moments);
 
     // Fit offsets using the optimized magnetic moments
-    float min_bounds_offsets[6] = {-1.0f, -1.0f, -1.0f, -1.0f / 180.0f * 3.14159265f, -1.0f / 180.0f * 3.14159265f, -1.0f / 180.0f * 3.14159265f}; // Lower bounds for offsets
-    float max_bounds_offsets[6] = {1.0f, 1.0f, 1.0f, 1.0f / 180.0f * 3.14159265f, 1.0f / 180.0f * 3.14159265f, 1.0f / 180.0f * 3.14159265f};       // Upper bounds for offsets
-    float fitted_offsets[6] = {0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f};                                                                                // Start with zero offsets
+    float min_bounds_offsets[6] = {
+      CALIBRATION_FIT_X_MIN,
+      CALIBRATION_FIT_Y_MIN,
+      CALIBRATION_FIT_Z_MIN,
+      CALIBRATION_FIT_RX_MIN / 180.0f * 3.14159265f,
+      CALIBRATION_FIT_RY_MIN / 180.0f * 3.14159265f,
+      CALIBRATION_FIT_RZ_MIN / 180.0f * 3.14159265f,
+    }; // Lower bounds for offsets
+    float max_bounds_offsets[6] = {
+      CALIBRATION_FIT_X_MAX,
+      CALIBRATION_FIT_Y_MAX,
+      CALIBRATION_FIT_Z_MAX,
+      CALIBRATION_FIT_RX_MAX / 180.0f * 3.14159265f,
+      CALIBRATION_FIT_RY_MAX / 180.0f * 3.14159265f,
+      CALIBRATION_FIT_RZ_MAX / 180.0f * 3.14159265f,
+    }; // Upper bounds for offsets
+
+    float fitted_offsets[6] = {0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f}; // Start with zero offsets
     solve_least_squares(fitted_offsets, 6, means, calibrationModel, get_model_func_offsets, min_bounds_offsets, max_bounds_offsets);
 
 #ifdef _CALIBRATION_SERIAL_DEBUG

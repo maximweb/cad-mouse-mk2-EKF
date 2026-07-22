@@ -30,5 +30,50 @@
 #define CALIBRATION_SAMPLE_TIMEOUT_MS (CALIBRATION_SAMPLE_COUNT * CALIBRATION_SAMPLE_DELAY_MS * 5)
 #define RUNNING_STATE_READ_ERROR_TIMEOUT_MS 50
 
+// Button Controller
+#define BUTTON_COMBO_WINDOW_MS 500 // Time window to detect combined long press of both buttons
+
+// Dipole Model
+#define DIPOLE_MODEL_MAGNETIC_MOMENT_DEFAULT 0.18f // Default magnetic moment for each of the three magnets in A*m^2
+
+// Extended Kalman Filter
+#define EKF_PROCESS_NOISE_STD 1.0f // Standard deviation for process noise
+#define EKF_SENSOR_NOISE_STD 5.0f  // Standard deviation for sensor noise
+
+// Normalization, Deadzone, and Isolation
+#define NORMALIZATION_X_MAX 2.0f  // Maximum translation in mm for normalization
+#define NORMALIZATION_Y_MAX 2.0f  // Maximum translation in mm for normalization
+#define NORMALIZATION_Z_MAX 2.0f  // Maximum translation in mm for normalization
+#define NORMALIZATION_RX_MAX 7.0f // Maximum rotation in degrees for normalization
+#define NORMALIZATION_RY_MAX 7.0f // Maximum rotation in degrees for normalization
+#define NORMALIZATION_RZ_MAX 7.0f // Maximum rotation in degrees for normalization
+
+#define DEADZONE_TRANSLATION_THRESHOLD 0.05f // Deadzone threshold for translation in normalized units (5%)
+#define DEADZONE_ROTATION_THRESHOLD 0.05f    // Deadzone threshold for rotation in normalized units (5%)
+
+#define ISOLATION_POWER 3.0f // Power for curved isolation (3.0f -> cubic isolation); while being a float, only 1, 2, 3, and 0.5 are optimized for RP2350 hardware. Other values will be slow.
+
+// Calibration
+#define CALIBRATION_FIT_MOMENT_BOUNDS 0.5f // bounds for magnetic moment fitting in A/m^2
+
+#define CALIBRATION_FIT_X_MIN -1.0f  // lower bound for x offset fitting in mm
+#define CALIBRATION_FIT_X_MAX 1.0f   // upper bound for x offset fitting in mm
+#define CALIBRATION_FIT_Y_MIN -1.0f  // lower bound for y offset fitting in mm
+#define CALIBRATION_FIT_Y_MAX 1.0f   // upper bound for y offset fitting in mm
+#define CALIBRATION_FIT_Z_MIN -1.0f  // lower bound for z offset fitting in mm
+#define CALIBRATION_FIT_Z_MAX 1.0f   // upper bound for z offset fitting in mm
+#define CALIBRATION_FIT_RX_MIN -1.0f // lower bound for rx offset fitting in degrees
+#define CALIBRATION_FIT_RX_MAX 1.0f  // upper bound for rx offset fitting in degrees
+#define CALIBRATION_FIT_RY_MIN -1.0f // lower bound for ry offset fitting in degrees
+#define CALIBRATION_FIT_RY_MAX 1.0f  // upper bound for ry offset fitting in degrees
+#define CALIBRATION_FIT_RZ_MIN -1.0f // lower bound for rz offset fitting in degrees
+#define CALIBRATION_FIT_RZ_MAX 1.0f  // upper bound for rz offset fitting in degrees
+
 // HID
 #define HID_REPORT_INTERVAL_MS 4 // 4 ms interval for sending HID reports (250 Hz) current Core 1 roundtrip time is ~2ms
+
+// Debugging via Serial
+// Uncomment any of the following lines to enable serial debug output for the corresponding module
+// #define _STATE_MACHINE_SERIAL_DEBUG 1
+// #define _CALIBRATION_SERIAL_DEBUG 1
+// #define _DIPOLE_MODEL_SERIAL_DEBUG 1

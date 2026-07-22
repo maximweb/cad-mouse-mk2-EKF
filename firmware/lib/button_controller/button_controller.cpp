@@ -97,7 +97,7 @@ void ButtonController::update()
     m_buttonRight.check();
 
     uint32_t now = millis();
-    const uint32_t comboWindow = 500; // 500 ms threshold for combo detection
+    const uint32_t comboWindow = BUTTON_COMBO_WINDOW_MS; // threshold for combo detection
 
     if (m_buttonLeftState == ButtonState::PENDING_LONG_PRESS && m_buttonRightState == ButtonState::PENDING_LONG_PRESS) {
         // Both buttons are in pending long press state
