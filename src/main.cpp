@@ -247,30 +247,30 @@ void loop()
         stateMachine.enter_CALIBRATE_COLLECT();
     }
 
-    static uint32_t buttons = 0; // Initialize hat switch value
+    static uint16_t buttons = 0; // Initialize hat switch value
 
     ButtonController::ButtonState left_button_state = buttonController.getLeftButtonState();
     ButtonController::ButtonState right_button_state = buttonController.getRightButtonState();
 
     if (left_button_state == ButtonController::ButtonState::PRESSED) {
         Serial.println("Left button pressed");
-        buttons |= 1U; // Set bit 0 for left button press
+        buttons |= 0x0001; // Set bit 0 for left button press
         // x_test += 0.1f; // Increment x_test by 0.1
     }
     else if (left_button_state == ButtonController::ButtonState::RELEASED) {
         Serial.println("Left button released");
-        buttons &= ~1U; // Clear bit 0 for left button release
+        buttons &= ~0x0001; // Clear bit 0 for left button release
     }
     if (right_button_state == ButtonController::ButtonState::PRESSED) {
         Serial.println("Right button pressed");
-        buttons |= 2U; // Set bit 1 for right button press
+        buttons |= 0x0002; // Set bit 1 for right button press
     }
     else if (right_button_state == ButtonController::ButtonState::RELEASED) {
         Serial.println("Right button released");
-        buttons &= ~2U; // Clear bit 1 for right button release
+        buttons &= ~0x0002; // Clear bit 1 for right button release
     }
     hidController.task();
-    hidController.sendReport(latest_estimated_state, 0, buttons);
+    hidController.sendReport(latest_estimated_state, buttons);
 
     // LED controller update
     ledController.update();

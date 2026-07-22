@@ -1,55 +1,42 @@
 #include "hid_controller.h"
 
 namespace {
-    const uint8_t hid_report_descriptor[] = {HID_USAGE_PAGE(HID_USAGE_PAGE_DESKTOP),
-                                             HID_USAGE(HID_USAGE_DESKTOP_JOYSTICK),
-                                             HID_COLLECTION(HID_COLLECTION_APPLICATION),
+    const uint8_t hid_report_descriptor[] = {
+      HID_USAGE_PAGE(HID_USAGE_PAGE_DESKTOP),             // USAGE_PAGE (Generic Desktop)
+      HID_USAGE(HID_USAGE_DESKTOP_MULTI_AXIS_CONTROLLER), // USAGE (Multi-axis Controller)
+      HID_COLLECTION(HID_COLLECTION_APPLICATION),         // COLLECTION (Application)
 
-                                             // 1. Report ID (Matches your m_hid.sendReport(1, ...))
-                                             HID_REPORT_ID(1)
+      HID_COLLECTION(HID_COLLECTION_PHYSICAL),           // COLLECTION (Physical)
+      HID_REPORT_ID(0x01)                                // REPORT_ID (1)
+      HID_LOGICAL_MIN_N(0xFEA2, 2),                      // LOGICAL_MINIMUM (-350)
+      HID_LOGICAL_MAX_N(0x015E, 2),                      // LOGICAL_MAXIMUM (350)
+      HID_USAGE(HID_USAGE_DESKTOP_X),                    // USAGE (X)
+      HID_USAGE(HID_USAGE_DESKTOP_Y),                    // USAGE (Y)
+      HID_USAGE(HID_USAGE_DESKTOP_Z),                    // USAGE (Z)
+      HID_USAGE(HID_USAGE_DESKTOP_RX),                   // USAGE (Rx)
+      HID_USAGE(HID_USAGE_DESKTOP_RY),                   // USAGE (Ry)
+      HID_USAGE(HID_USAGE_DESKTOP_RZ),                   // USAGE (Rz)
+      HID_REPORT_SIZE(16),                               // REPORT_SIZE (16)
+      HID_REPORT_COUNT(6),                               // REPORT_COUNT (6)
+      HID_INPUT(HID_DATA | HID_VARIABLE | HID_ABSOLUTE), // INPUT (Data,Var,Abs)
+      HID_COLLECTION_END,                                // END_COLLECTION
 
-                                             // 2. Axes: 16-bit X, Y, Z, Rz, Rx, Ry
-                                             HID_USAGE_PAGE(HID_USAGE_PAGE_DESKTOP),
-                                             HID_USAGE(HID_USAGE_DESKTOP_X),
-                                             HID_USAGE(HID_USAGE_DESKTOP_Y),
-                                             HID_USAGE(HID_USAGE_DESKTOP_Z),
-                                             HID_USAGE(HID_USAGE_DESKTOP_RZ),
-                                             HID_USAGE(HID_USAGE_DESKTOP_RX),
-                                             HID_USAGE(HID_USAGE_DESKTOP_RY),
-                                             HID_LOGICAL_MIN_N(0x8001, 2), // -32767
-                                             HID_LOGICAL_MAX_N(0x7fff, 2), // 32767
-                                             HID_REPORT_COUNT(6),
-                                             HID_REPORT_SIZE(16),
-                                             HID_INPUT(HID_DATA | HID_VARIABLE | HID_ABSOLUTE),
+      HID_COLLECTION(HID_COLLECTION_PHYSICAL),            // COLLECTION (Physical)
+      HID_REPORT_ID(0x03)                                 // REPORT_ID (3)
+      HID_USAGE_PAGE(HID_USAGE_PAGE_BUTTON),              // USAGE_PAGE (Button)
+      HID_USAGE_MIN(1),                                   // USAGE_MINIMUM (Button 1)
+      HID_USAGE_MAX(2),                                   // USAGE_MAXIMUM (Button 2)
+      HID_LOGICAL_MIN(0),                                 // LOGICAL_MINIMUM (0)
+      HID_LOGICAL_MAX(1),                                 // LOGICAL_MAXIMUM (1)
+      HID_REPORT_SIZE(1),                                 // REPORT_SIZE (1)
+      HID_REPORT_COUNT(2),                                // REPORT_COUNT (2)
+      HID_INPUT(HID_DATA | HID_VARIABLE | HID_ABSOLUTE),  // INPUT (Data,Var,Abs)
+      HID_REPORT_COUNT(14),                               // REPORT_COUNT (14) padding
+      HID_INPUT(HID_CONSTANT | HID_ARRAY | HID_ABSOLUTE), // INPUT (Const,Array,Abs)
+      HID_COLLECTION_END,                                 // END_COLLECTION
 
-                                             // 3. Hat Switch (D-Pad)
-                                             HID_USAGE_PAGE(HID_USAGE_PAGE_DESKTOP),
-                                             HID_USAGE(HID_USAGE_DESKTOP_HAT_SWITCH),
-                                             HID_LOGICAL_MIN(1),
-                                             HID_LOGICAL_MAX(8),
-                                             HID_PHYSICAL_MIN(0),
-                                             HID_PHYSICAL_MAX_N(315, 2), // Sets physical max to 315
-                                             HID_REPORT_COUNT(1),
-                                             HID_REPORT_SIZE(8),
-                                             HID_INPUT(HID_DATA | HID_VARIABLE | HID_ABSOLUTE),
-
-                                             // 4. Buttons (32-bit map)
-                                             HID_USAGE_PAGE(HID_USAGE_PAGE_BUTTON),
-                                             HID_USAGE_MIN(1),
-                                             HID_USAGE_MAX(32),
-                                             HID_LOGICAL_MIN(0),
-                                             HID_LOGICAL_MAX(1),
-
-                                             // --- MACOS CRITICAL FIX: RESET THE PHYSICAL BOUNDS ---
-                                             HID_PHYSICAL_MIN(0),
-                                             HID_PHYSICAL_MAX(1),
-                                             // -----------------------------------------------------
-
-                                             HID_REPORT_COUNT(32),
-                                             HID_REPORT_SIZE(1),
-                                             HID_INPUT(HID_DATA | HID_VARIABLE | HID_ABSOLUTE),
-
-                                             HID_COLLECTION_END};
+      HID_COLLECTION_END, // END_COLLECTION
+    };
 }
 
 bool HIDController::begin()
@@ -72,14 +59,14 @@ bool HIDController::begin()
         TinyUSBDevice.attach();
     }
 
-    m_report.x = 0;
-    m_report.y = 0;
-    m_report.z = 0;
-    m_report.rz = 0;
-    m_report.rx = 0;
-    m_report.ry = 0;
-    m_report.hat = 0;
-    m_report.buttons = 0;
+    m_report_axes.x = 0;
+    m_report_axes.y = 0;
+    m_report_axes.z = 0;
+    m_report_axes.rz = 0;
+    m_report_axes.rx = 0;
+    m_report_axes.ry = 0;
+
+    m_report_buttons.bits = 0;
 
     return true;
 }
@@ -89,7 +76,7 @@ void HIDController::task()
     TinyUSBDevice.task();
 }
 
-void HIDController::sendReport(float filtered_state[12], uint8_t hat, uint32_t buttons)
+void HIDController::sendReport(float filtered_state[12], uint16_t buttons)
 {
     // Send HID report
 
@@ -115,56 +102,64 @@ void HIDController::sendReport(float filtered_state[12], uint8_t hat, uint32_t b
         return; // HID device not ready to send report
     }
 
-    // Prepare the report data
-    m_report.hat = hat;         // Set hat switch value
-    m_report.buttons = buttons; // Set buttons state
+    ReportAxes new_axes = makeReportAxes(filtered_state);
+    ReportButtons new_buttons = makeReportButtons(buttons);
+    bool axes_changed = axesChanged(new_axes);
+    bool buttons_changed = buttonsChanged(new_buttons);
 
-    // Mat the first 6 floats to the x, y, z, rz, rx, ry int8_t values
-    // [-1, 1] range to [-32767, 32767] range
-    m_report.x = static_cast<int16_t>(filtered_state[0] * 32767.f);
-    m_report.y = static_cast<int16_t>(filtered_state[1] * 32767.f);
-    m_report.z = static_cast<int16_t>(filtered_state[2] * 32767.f);
-    m_report.rz = static_cast<int16_t>(filtered_state[3] * 32767.f);
-    m_report.rx = static_cast<int16_t>(filtered_state[4] * 32767.f);
-    m_report.ry = static_cast<int16_t>(filtered_state[5] * 32767.f);
+    if (axes_changed) {
+        m_report_axes = new_axes;
+        m_hid.sendReport(0x01, &m_report_axes, sizeof(m_report_axes));
+    }
 
-    // report.x = random(-127, 128);
-    // report.y = random(-127, 128);
-    // report.z = random(-127, 128);
-    // report.rz = random(-127, 128);
-    // report.rx = random(-127, 128);
-    // report.ry = random(-127, 128);
-    // report.hat = random(0, 9);
-    // report.buttons = random(0, 0xffff);
+    if (axes_changed && buttons_changed) {
+        // Need a task between reports
+        task();
+    }
 
-    // Serial.print("Sending HID report: ");
-    // Serial.print("x: ");
-    // Serial.println(m_report.x);
-    // Serial.print(", y: ");
-    // Serial.print(m_report.y);
-    // Serial.print(", z: ");
-    // Serial.print(m_report.z);
-    // Serial.print(", rz: ");
-    // Serial.print(m_report.rz);
-    // Serial.print(", rx: ");
-    // Serial.print(m_report.rx);
-    // Serial.print(", ry: ");
-    // Serial.print(m_report.ry);
-    // Serial.print(", hat: ");
-    // Serial.print(m_report.hat);
-    // Serial.print(", buttons: ");
-    // Serial.println(buttons, BIN);
+    if (buttons_changed) {
+        m_report_buttons = new_buttons;
+        m_hid.sendReport(0x03, &m_report_buttons, sizeof(m_report_buttons));
+    }
 
-    // static bool tic = false;
-    // if (tic) {
-    //     Serial.print(":");
-    //     tic = false;
-    // }
-    // else {
-    //     Serial.print(".");
-    //     tic = true;
-    // }
+    if (axes_changed || buttons_changed) {
+        m_last_sent_time_ms = now; // Update the timestamp of the last sent report
+    }
+}
 
-    m_hid.sendReport(1, &m_report, sizeof(m_report));
-    m_last_sent_time_ms = now; // Update the timestamp of the last sent report
+HIDController::ReportAxes HIDController::makeReportAxes(float filtered_state[12])
+{
+    // Seems like some software prefers
+    // y-axis points towards the user
+    // z-axis points downwards
+    ReportAxes report_axes;
+    report_axes.x = static_cast<int16_t>(filtered_state[0] * 350.0f);
+    report_axes.y = static_cast<int16_t>(filtered_state[1] * -350.0f);
+    report_axes.z = static_cast<int16_t>(filtered_state[2] * -350.0f);
+    report_axes.rx = static_cast<int16_t>(filtered_state[3] * 350.0f);
+    report_axes.ry = static_cast<int16_t>(filtered_state[4] * -350.0f);
+    report_axes.rz = static_cast<int16_t>(filtered_state[5] * -350.0f);
+    return report_axes;
+}
+
+HIDController::ReportButtons HIDController::makeReportButtons(uint16_t buttons)
+{
+    ReportButtons report_buttons;
+    report_buttons.bits = buttons & 0x0003;
+    return report_buttons;
+}
+
+bool HIDController::axesChanged(const ReportAxes& new_axes)
+{
+    return new_axes.x != m_report_axes.x ||   //
+           new_axes.y != m_report_axes.y ||   //
+           new_axes.z != m_report_axes.z ||   //
+           new_axes.rx != m_report_axes.rx || //
+           new_axes.ry != m_report_axes.ry || //
+           new_axes.rz != m_report_axes.rz;
+}
+
+bool HIDController::buttonsChanged(const ReportButtons& new_buttons)
+{
+    return new_buttons.bits != m_report_buttons.bits;
 }
