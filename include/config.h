@@ -38,12 +38,12 @@
 #define EKF_SENSOR_NOISE_STD 5.0f  // Standard deviation for sensor noise
 
 // Normalization, Deadzone, and Isolation
-#define NORMALIZATION_X_MAX 2.0f  // Maximum translation in mm for normalization
-#define NORMALIZATION_Y_MAX 2.0f  // Maximum translation in mm for normalization
-#define NORMALIZATION_Z_MAX 2.0f  // Maximum translation in mm for normalization
-#define NORMALIZATION_RX_MAX 7.0f // Maximum rotation in degrees for normalization
-#define NORMALIZATION_RY_MAX 7.0f // Maximum rotation in degrees for normalization
-#define NORMALIZATION_RZ_MAX 7.0f // Maximum rotation in degrees for normalization
+#define NORMALIZATION_X_MAX 1.7f  // Maximum translation in mm for normalization
+#define NORMALIZATION_Y_MAX 1.7f  // Maximum translation in mm for normalization
+#define NORMALIZATION_Z_MAX 1.5f  // Maximum translation in mm for normalization TODO: might need different (lower) MAX than MIN
+#define NORMALIZATION_RX_MAX 6.5f // Maximum rotation in degrees for normalization
+#define NORMALIZATION_RY_MAX 6.5f // Maximum rotation in degrees for normalization
+#define NORMALIZATION_RZ_MAX 5.5f // Maximum rotation in degrees for normalization
 
 #define DEADZONE_TRANSLATION_THRESHOLD 0.05f // Deadzone threshold for translation in normalized units (5%)
 #define DEADZONE_ROTATION_THRESHOLD 0.05f    // Deadzone threshold for rotation in normalized units (5%)
