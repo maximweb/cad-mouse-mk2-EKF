@@ -127,6 +127,11 @@ void HIDController::sendReport(float filtered_state[12], uint16_t buttons)
     }
 }
 
+uint32_t HIDController::get_last_report_time_ms()
+{
+    return m_last_sent_time_ms;
+}
+
 HIDController::ReportAxes HIDController::makeReportAxes(float filtered_state[12])
 {
     // Seems like some software prefers

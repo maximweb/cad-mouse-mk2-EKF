@@ -152,6 +152,7 @@ void loop()
             break;
         }
 
+        case StateMachine::State::RUNNING_NO_LED:
         case StateMachine::State::RUNNING_WITHOUT_CALIBRATION:
         case StateMachine::State::RUNNING: {
             // RUNNING state: Normal operation,
@@ -226,6 +227,24 @@ void loop()
             if (now - stateMachine.get_last_filtered_data_received_time_ms() > RUNNING_STATE_READ_ERROR_TIMEOUT_MS) {
                 stateMachine.enter_SENSOR_ERROR();
             }
+
+            // Transition between different RUNNING_... states
+            if (now - hidController.get_last_report_time_ms() > RUNNING_STATE_INACTIVITY_TIMEOUT_MS) {
+                // Transition to RUNNING_NO_LED on inactivity.
+                // We can infer inactivity by checking time last HID report was sent
+                // as we only send HID on changes in axes or buttons.
+                stateMachine.enter_RUNNING_NO_LED(); // does nothing if already in RUNNING_NO_LED state
+            }
+            else {
+                // Transition back to RUNNING or RUNNING_WITHOUT_CALIBRATION on activity,
+                // depending on whether calibration data is available.
+                if (stateMachine.get_calibration_load_state() != Calibration::LoadState::NO_FILE_USING_DEFAULTS) {
+                    stateMachine.enter_RUNNING(); // does nothing if already in RUNNING state
+                }
+                else {
+                    stateMachine.enter_RUNNING_WITHOUT_CALIBRATION(); // does nothing if already in RUNNING_WITHOUT_CALIBRATION state
+                }
+            }
             break;
         }
         default: {
@@ -239,7 +258,6 @@ void loop()
 
     // Updates
     buttonController.update(); // Do first, so we can react to button presses immediately
-    // test_button_controller();
 
     // Handle combo button states first
     ButtonController::ComboState combo_state = buttonController.getComboState();
@@ -247,7 +265,7 @@ void loop()
         stateMachine.enter_CALIBRATE_COLLECT();
     }
 
-    static uint16_t buttons = 0; // Initialize hat switch value
+    static uint16_t buttons = 0; // Initialize buttons to 0 (no buttons pressed)
 
     ButtonController::ButtonState left_button_state = buttonController.getLeftButtonState();
     ButtonController::ButtonState right_button_state = buttonController.getRightButtonState();
@@ -255,7 +273,6 @@ void loop()
     if (left_button_state == ButtonController::ButtonState::PRESSED) {
         Serial.println("Left button pressed");
         buttons |= 0x0001; // Set bit 0 for left button press
-        // x_test += 0.1f; // Increment x_test by 0.1
     }
     else if (left_button_state == ButtonController::ButtonState::RELEASED) {
         Serial.println("Left button released");
