@@ -26,6 +26,7 @@
 #define CALIBRATION_SAMPLE_DELAY_MS 20
 #define CALIBRATION_SAMPLE_TIMEOUT_MS (CALIBRATION_SAMPLE_COUNT * CALIBRATION_SAMPLE_DELAY_MS * 5)
 #define RUNNING_STATE_READ_ERROR_TIMEOUT_MS 50
+#define RUNNING_STATE_INACTIVITY_TIMEOUT_MS 60000 // 60 seconds until LEDs turned off due to inactivity
 
 // Button Controller
 #define BUTTON_COMBO_WINDOW_MS 500 // Time window to detect combined long press of both buttons

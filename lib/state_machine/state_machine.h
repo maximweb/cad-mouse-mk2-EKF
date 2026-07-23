@@ -89,6 +89,12 @@ public:
             - Visualizer (permanent): Solid ORANGE LED to indicate normal operation without calibration
         */
         RUNNING_WITHOUT_CALIBRATION,
+        /*
+            Normal operation state without LED visualizer.
+            Identical to RUNNING and RUNNING_WITHOUT_CALIBRATION states, but without any LED visualizer.
+            - Visualizer (permanent): Off
+        */
+        RUNNING_NO_LED,
     };
 
     StateMachine(LEDController& led_controller, DipoleModel& dipole_model);
@@ -112,6 +118,7 @@ public:
     void enter_CALIBRATE_COMPUTE();
     void enter_RUNNING();
     void enter_RUNNING_WITHOUT_CALIBRATION();
+    void enter_RUNNING_NO_LED();
 
     // We only handle some of the state transitions here,
     // as some transitions need several global data or functions

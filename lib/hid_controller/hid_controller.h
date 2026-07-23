@@ -24,6 +24,8 @@ public:
     void task();
     void sendReport(float filtered_state[12], uint16_t buttons);
 
+    uint32_t get_last_report_time_ms();
+
 private:
     Adafruit_USBD_HID m_hid;
 
