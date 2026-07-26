@@ -8,7 +8,7 @@ using namespace ifx::tlx493d;
 
 class HallSensorController {
 public:
-    HallSensorController(uint8_t sensor1PowerPin, uint8_t sensor2PowerPin, uint8_t sensor3PowerPin, bool fullRange = true);
+    HallSensorController(TwoWire& wire, uint8_t sensor1PowerPin, uint8_t sensor2PowerPin, uint8_t sensor3PowerPin, bool fullRange = true);
 
     void begin();
     bool readRaw(int16_t out[9]);
@@ -25,6 +25,8 @@ private:
 
     TLx493D_SensitivityType_t m_sensitivity;
     float m_scaleFactor;
+
+    TwoWire& m_wire;
 
     uint8_t m_sensor1PowerPin;
     uint8_t m_sensor2PowerPin;

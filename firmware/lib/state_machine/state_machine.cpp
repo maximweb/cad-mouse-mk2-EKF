@@ -134,6 +134,8 @@ void StateMachine::enter_RUNNING()
     if (change_state(State::RUNNING)) {
         m_led_controller.set_solid(LED_RUNNING_COLOR); // Solid WHITE LED
         m_led_controller.on();
+
+        m_last_filtered_data_received_time_ms = millis(); // Reset the timeout timer for filtered data reception
     }
 }
 
@@ -142,6 +144,8 @@ void StateMachine::enter_RUNNING_WITHOUT_CALIBRATION()
     if (change_state(State::RUNNING_WITHOUT_CALIBRATION)) {
         m_led_controller.set_solid(LED_RUNNING_WITHOUT_CALIBRATION_COLOR); // Solid ORANGE LED
         m_led_controller.on();
+
+        m_last_filtered_data_received_time_ms = millis(); // Reset the timeout timer for filtered data reception
     }
 }
 
@@ -149,6 +153,8 @@ void StateMachine::enter_RUNNING_NO_LED()
 {
     if (change_state(State::RUNNING_NO_LED)) {
         m_led_controller.off(); // Turn off LED
+
+        m_last_filtered_data_received_time_ms = millis(); // Reset the timeout timer for filtered data reception
     }
 }
 

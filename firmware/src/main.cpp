@@ -1,5 +1,4 @@
 #include <Arduino.h>
-#include <pico/multicore.h>
 
 #include "config.h"
 
@@ -21,7 +20,13 @@
     GLOBAL OBJECTS
 */
 
-HallSensorController hallController = HallSensorController(PIN_MAG1_LS, PIN_MAG2_LS, PIN_MAG3_LS);
+#ifdef BOARD_RP2350
+// For RP2350, use the alternate I2C pins (SDA1, SCL1) for Wire1
+HallSensorController hallController = HallSensorController(Wire1, PIN_MAG1_LS, PIN_MAG2_LS, PIN_MAG3_LS);
+#else
+// For RP2040, use the default I2C pins (SDA, SCL) for Wire
+HallSensorController hallController = HallSensorController(Wire, PIN_MAG1_LS, PIN_MAG2_LS, PIN_MAG3_LS);
+#endif
 LEDController ledController = LEDController(PIN_LED_LS, PIN_LED_DATA, LED_COUNT);
 DipoleModel dipoleModel = DipoleModel();
 ExtendedKalmanFilter ekf = ExtendedKalmanFilter();
@@ -32,6 +37,12 @@ HIDController hidController = HIDController();
 /*
     SHARED DATA STRUCTURES FOR CORE 0 AND CORE 1 COMMUNICATION
 */
+
+// 0 = Core 1 is uninitialized
+// 1 = Core 1 is ready but has not received any data from Core 0 yet
+// 2 = Core 0 has new data ready for Core 1 to process
+// 3 = Core 1 has finished processing and filtered data is ready
+volatile uint8_t core_sync_state = 0;
 
 // Shared raw sensor data for Core 0 to Core 1 communication
 struct RawSensorData {
@@ -116,9 +127,15 @@ void loop()
         case StateMachine::State::SENSOR_ERROR: {
             // Failed to get hall sensor values, reattempt CHECK_SENSORS repeatedly after a delay
             if (now - stateMachine.get_last_state_change_time_ms() > SENSOR_RECONNECT_DELAY_MS) {
-                hallController.begin(); // Reinitialize the hall sensor controller
-                stateMachine.enter_CHECK_SENSORS();
+                stateMachine.enter_SENSOR_RECONNECT();
             }
+            break;
+        }
+
+        case StateMachine::State::SENSOR_RECONNECT: {
+            // Reattempt to reconnect to hall sensors
+            hallController.begin(); // Reinitialize the hall sensor controller
+            stateMachine.enter_CHECK_SENSORS();
             break;
         }
 
@@ -160,64 +177,60 @@ void loop()
             // read raw sensor data, send to Core 1 for processing
             // TODO: Send via HID to host computer
 
-            // Check if Core 1 is idle
-            if (multicore_fifo_rvalid()) {
-                uint32_t response = multicore_fifo_pop_blocking();
+            // Check Core 1 for available filtered data
+            if (core_sync_state == 3) {
+                // Core 1 has finished processing and is now idle
+                // Read the filtered pose from shared memory
 
-                // Check Core 1 for available processed data
-                if (response == 3) {
-                    // Core 1 has finished processing and is now idle
-                    // Read the filtered pose from shared memory
+                stateMachine.set_last_filtered_data_received_time_ms(now);
 
-                    stateMachine.set_last_filtered_data_received_time_ms(now);
+                latest_estimated_state[0] = sharedFilteredData.x;
+                latest_estimated_state[1] = sharedFilteredData.y;
+                latest_estimated_state[2] = sharedFilteredData.z;
+                latest_estimated_state[3] = sharedFilteredData.rx;
+                latest_estimated_state[4] = sharedFilteredData.ry;
+                latest_estimated_state[5] = sharedFilteredData.rz;
+                latest_estimated_state[6] = sharedFilteredData.vx;
+                latest_estimated_state[7] = sharedFilteredData.vy;
+                latest_estimated_state[8] = sharedFilteredData.vz;
+                latest_estimated_state[9] = sharedFilteredData.vrx;
+                latest_estimated_state[10] = sharedFilteredData.vry;
+                latest_estimated_state[11] = sharedFilteredData.vrz;
 
-                    latest_estimated_state[0] = sharedFilteredData.x;
-                    latest_estimated_state[1] = sharedFilteredData.y;
-                    latest_estimated_state[2] = sharedFilteredData.z;
-                    latest_estimated_state[3] = sharedFilteredData.rx;
-                    latest_estimated_state[4] = sharedFilteredData.ry;
-                    latest_estimated_state[5] = sharedFilteredData.rz;
-                    latest_estimated_state[6] = sharedFilteredData.vx;
-                    latest_estimated_state[7] = sharedFilteredData.vy;
-                    latest_estimated_state[8] = sharedFilteredData.vz;
-                    latest_estimated_state[9] = sharedFilteredData.vrx;
-                    latest_estimated_state[10] = sharedFilteredData.vry;
-                    latest_estimated_state[11] = sharedFilteredData.vrz;
-
-#ifdef _MAIN_SERIAL_DEBUG
-                    // Print roundtrip time between consecutive readings->filtering->return
-                    // Implies frequency of HID updates must be less than this
-                    float dt_ms = sharedFilteredData.dt * 1e3;
-                    Serial.print("Filter DT: ");
-                    Serial.printf("%.3f", dt_ms);
-                    Serial.println(" ms");
+#ifdef _MAIN_SERIAL_PRINT_CORE1_DURATION || _MAIN_SERIAL_DEBUG
+                // Print roundtrip time between consecutive readings->filtering->return
+                // Implies frequency of HID updates must be less than this
+                float dt_ms = sharedFilteredData.dt * 1e3;
+                Serial.print("Filter DT: ");
+                Serial.printf("%.3f", dt_ms);
+                Serial.println(" ms");
 #endif
 
 #ifdef _MAIN_SERIAL_DEBUG
-                    // Print the latest estimated state for debugging
-                    Helpers::print_estimated_state(latest_estimated_state);
-                    // Condensed print for debugging
-                    // Helpers::print_condensed_estimated_state(latest_estimated_state);
+                // Print the latest estimated state for debugging
+                Helpers::print_estimated_state(latest_estimated_state);
+                // Condensed print for debugging
+                // Helpers::print_condensed_estimated_state(latest_estimated_state);
 #endif
-                }
+            }
 
-                // Send new data to Core 1
-                if (response == 1 || response == 3) {
-                    // 1 = has never recieved any data
-                    // 3 = has finished processing and is now idle
+            // Send new data to Core 1
+            if (core_sync_state == 1 || core_sync_state == 3) {
+                // 1 = is ready, but has never recieved any data
+                // 3 = has finished processing and is now idle
 
-                    // Read sensor data and store in shared memory
-                    sensor_status = hallController.read(rawSensorData);
-                    if (sensor_status) {
-                        // Store in shared memory for Core 1 to access
-                        for (int i = 0; i < 9; ++i) {
-                            sharedRawSensorData.rawData[i] = rawSensorData[i];
-                        }
-                        sharedRawSensorData.timestamp_us = micros();
+                // Read sensor data and store in shared memory
+                sensor_status = hallController.read(rawSensorData);
 
-                        __dmb();                         // Ensure memory is written before signaling Core 1
-                        multicore_fifo_push_blocking(2); // 2 = Signal Core 1 to process new data
+                if (sensor_status) {
+                    // Store in shared memory for Core 1 to access
+                    for (int i = 0; i < 9; ++i) {
+                        sharedRawSensorData.rawData[i] = rawSensorData[i];
                     }
+                    sharedRawSensorData.timestamp_us = micros();
+
+                    __dmb();             // Ensure memory is written before signaling Core 1
+                    core_sync_state = 2; // 2 = Core 0 has new data ready for Core 1 to process
                 }
             }
 
@@ -226,6 +239,7 @@ void loop()
             // Timeout check (no sensor readings) -> SENSOR_RECONNECT state
             if (now - stateMachine.get_last_filtered_data_received_time_ms() > RUNNING_STATE_READ_ERROR_TIMEOUT_MS) {
                 stateMachine.enter_SENSOR_ERROR();
+                break;
             }
 
             // Transition between different RUNNING_... states
@@ -234,15 +248,18 @@ void loop()
                 // We can infer inactivity by checking time last HID report was sent
                 // as we only send HID on changes in axes or buttons.
                 stateMachine.enter_RUNNING_NO_LED(); // does nothing if already in RUNNING_NO_LED state
+                break;
             }
             else {
                 // Transition back to RUNNING or RUNNING_WITHOUT_CALIBRATION on activity,
                 // depending on whether calibration data is available.
                 if (stateMachine.get_calibration_load_state() != Calibration::LoadState::NO_FILE_USING_DEFAULTS) {
                     stateMachine.enter_RUNNING(); // does nothing if already in RUNNING state
+                    break;
                 }
                 else {
                     stateMachine.enter_RUNNING_WITHOUT_CALIBRATION(); // does nothing if already in RUNNING_WITHOUT_CALIBRATION state
+                    break;
                 }
             }
             break;
@@ -299,27 +316,23 @@ void loop()
 
     // LED controller update
     ledController.update();
-
-    // Small delay just to keep your Serial monitor readable during testing
-    // delay(10);
 }
 
 void setup1()
 {
     const float initial_state[6] = {0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f}; // Initial pose: x, y, z, rx, ry, rz
     ekf.init(initial_state, EKF_PROCESS_NOISE_STD, EKF_SENSOR_NOISE_STD);
-
-    // Prime the engine: Push a fake complete token to kickstart Core 0's loop
-    multicore_fifo_push_blocking(1); // 0 = Core 1 is idle and has never received any data
 }
 
 void loop1()
 {
-    // Wait for a signal from Core 0 to start processing
-    uint32_t trigger = multicore_fifo_pop_blocking();
+    // Indicate that Core 1 is ready to receive data from Core 0
+    if (core_sync_state == 0) {
+        core_sync_state = 1; // 1 = Core 1 is ready but has not received any data from Core 0 yet
+    }
 
-    // Bail out if Core 0 never sent any data
-    if (trigger == 1) {
+    // Bail out if Core 0 never sent any data; or if Core 0 has not yet processed the previous data
+    if (core_sync_state == 1 || core_sync_state == 3) {
         return;
     }
 
@@ -394,5 +407,5 @@ void loop1()
     __dmb(); // Ensure values are flushed to RAM
 
     // Once done processing, signal back to Core 0 that processing is complete
-    multicore_fifo_push_blocking(3);
+    core_sync_state = 3; // 3 = Core 1 has finished processing and filtered data is ready
 }

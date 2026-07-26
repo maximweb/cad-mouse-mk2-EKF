@@ -2,15 +2,16 @@
 
 #include "hall_controller.h"
 
-HallSensorController::HallSensorController(uint8_t sensor1PowerPin, uint8_t sensor2PowerPin, uint8_t sensor3PowerPin, bool fullRange)
-: m_sensor1PowerPin(sensor1PowerPin)
+HallSensorController::HallSensorController(TwoWire& wire, uint8_t sensor1PowerPin, uint8_t sensor2PowerPin, uint8_t sensor3PowerPin, bool fullRange)
+: m_wire(wire)
+, m_sensor1PowerPin(sensor1PowerPin)
 , m_sensor2PowerPin(sensor2PowerPin)
 , m_sensor3PowerPin(sensor3PowerPin)
 , m_sensitivity(fullRange ? TLx493D_FULL_RANGE_e : TLx493D_SHORT_RANGE_e)
 , m_scaleFactor(fullRange ? 7.7f : 15.4f)
-, m_sensor1(Wire1, TLx493D_IIC_ADDR_A0_e)
-, m_sensor2(Wire1, TLx493D_IIC_ADDR_A0_e)
-, m_sensor3(Wire1, TLx493D_IIC_ADDR_A0_e)
+, m_sensor1(m_wire, TLx493D_IIC_ADDR_A0_e)
+, m_sensor2(m_wire, TLx493D_IIC_ADDR_A0_e)
+, m_sensor3(m_wire, TLx493D_IIC_ADDR_A0_e)
 {
 }
 
@@ -28,9 +29,9 @@ void HallSensorController::begin()
     delay(5); // Wait for the sensors to power down
 
     // Initialize I2C communication
-    Wire1.begin();
-    // Wire1.setClock(800000); // Datasheet recommends >= 800kHz for fast mode.
-    Wire1.setClock(1000000); // Set I2C clock to 1 MHz (max) for faster communication
+    m_wire.begin();
+    // m_wire.setClock(800000); // Datasheet recommends >= 800kHz for fast mode.
+    m_wire.setClock(1000000); // Set I2C clock to 1 MHz (max) for faster communication
 
     // Power up and initialize sensors one by one to get unique I2C addresses
     powerOn(m_sensor1PowerPin);
@@ -120,13 +121,13 @@ bool HallSensorController::readSingleSensorRawFast(uint8_t sensorAddress, int16_
     // 1-Byte read mode, request data directly from address without sending a register address first
 
     // Request first 7 bytes (data and diagnostics)
-    if (Wire1.requestFrom(sensorAddress, static_cast<size_t>(7)) != 7)
+    if (m_wire.requestFrom(sensorAddress, static_cast<size_t>(7)) != 7)
         return false;
 
     // Read bytes
     uint8_t b[7];
     for (int i = 0; i < 7; ++i) {
-        b[i] = Wire1.read();
+        b[i] = m_wire.read();
     }
 
     // 1. XOR sum only the data registers (0x00 through 0x05)
