@@ -28,10 +28,12 @@
 
 #ifdef BOARD_RP2350
 #define RUNNING_STATE_READ_ERROR_TIMEOUT_MS 50 // 50 ms timeout for filtered data reception from Core 1 on RP2350
-#elif defined(BOARD_RP2040)
+#else
+#ifdef BOARD_RP2040
 #define RUNNING_STATE_READ_ERROR_TIMEOUT_MS 100 // 100 ms timeout for filtered data reception from Core 1 on RP2040
 #else
 #define RUNNING_STATE_READ_ERROR_TIMEOUT_MS 200 // 200 ms timeout for filtered data reception from Core 1 on unknown boards
+#endif
 #endif
 
 #define RUNNING_STATE_INACTIVITY_TIMEOUT_MS 60000 // 60 seconds until LEDs turned off due to inactivity
@@ -81,10 +83,12 @@
 // HID
 #ifdef BOARD_RP2350
 #define HID_REPORT_INTERVAL_MS 4 // 4 ms interval for sending HID reports (250 Hz) current Core 1 roundtrip time is ~2ms
-#elif defined(BOARD_RP2040)
+#else
+#ifdef BOARD_RP2040
 #define HID_REPORT_INTERVAL_MS 12 // 12 ms interval for sending HID reports (83.3 Hz) current Core 1 roundtrip time is ~10.7ms
 #else
 #define HID_REPORT_INTERVAL_MS 20 // Default to 20 ms interval for sending HID reports (50 Hz) for unknown boards
+#endif
 #endif
 
 // Debugging via Serial
