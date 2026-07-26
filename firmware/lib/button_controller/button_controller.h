@@ -9,12 +9,9 @@ public:
     enum class ButtonState {
         IDLE,
         PRESSED,
-        CLICKED,
         RELEASED,
-        DOUBLE_CLICKED,
         PENDING_LONG_PRESS,
         LONG_PRESSED,
-        // REPEAT_PRESSED,
     };
 
     enum class ComboState {

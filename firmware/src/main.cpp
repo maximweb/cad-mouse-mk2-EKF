@@ -271,19 +271,27 @@ void loop()
     ButtonController::ButtonState right_button_state = buttonController.getRightButtonState();
 
     if (left_button_state == ButtonController::ButtonState::PRESSED) {
+#ifdef _MAIN_SERIAL_DEBUG
         Serial.println("Left button pressed");
+#endif
         buttons |= 0x0001; // Set bit 0 for left button press
     }
     else if (left_button_state == ButtonController::ButtonState::RELEASED) {
+#ifdef _MAIN_SERIAL_DEBUG
         Serial.println("Left button released");
+#endif
         buttons &= ~0x0001; // Clear bit 0 for left button release
     }
     if (right_button_state == ButtonController::ButtonState::PRESSED) {
+#ifdef _MAIN_SERIAL_DEBUG
         Serial.println("Right button pressed");
+#endif
         buttons |= 0x0002; // Set bit 1 for right button press
     }
     else if (right_button_state == ButtonController::ButtonState::RELEASED) {
+#ifdef _MAIN_SERIAL_DEBUG
         Serial.println("Right button released");
+#endif
         buttons &= ~0x0002; // Clear bit 1 for right button release
     }
     hidController.task();

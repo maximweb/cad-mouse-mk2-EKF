@@ -32,12 +32,6 @@ void ButtonController::handleButtonEvent(ace_button::AceButton* button, uint8_t 
         else if (eventType == ace_button::AceButton::kEventReleased) {
             m_buttonLeftState = ButtonState::RELEASED;
         }
-        else if (eventType == ace_button::AceButton::kEventClicked) {
-            m_buttonLeftState = ButtonState::CLICKED;
-        }
-        else if (eventType == ace_button::AceButton::kEventDoubleClicked) {
-            m_buttonLeftState = ButtonState::DOUBLE_CLICKED;
-        }
         else if (eventType == ace_button::AceButton::kEventLongPressed) {
             m_buttonLeftState = ButtonState::PENDING_LONG_PRESS;
             m_leftPressTime = now; // Record the time when the long press started
@@ -51,15 +45,6 @@ void ButtonController::handleButtonEvent(ace_button::AceButton* button, uint8_t 
         }
         else if (eventType == ace_button::AceButton::kEventReleased) {
             m_buttonRightState = ButtonState::RELEASED;
-        }
-        else if (eventType == ace_button::AceButton::kEventClicked) {
-            m_buttonRightState = ButtonState::CLICKED;
-        }
-        if (eventType == ace_button::AceButton::kEventClicked) {
-            m_buttonRightState = ButtonState::CLICKED;
-        }
-        else if (eventType == ace_button::AceButton::kEventDoubleClicked) {
-            m_buttonRightState = ButtonState::DOUBLE_CLICKED;
         }
         else if (eventType == ace_button::AceButton::kEventLongPressed) {
             m_buttonRightState = ButtonState::PENDING_LONG_PRESS;
@@ -77,16 +62,10 @@ void ButtonController::begin()
     m_buttonRight.init(m_pinRight);
 
     ace_button::ButtonConfig* buttonConfigLeft = m_buttonLeft.getButtonConfig();
-    buttonConfigLeft->setFeature(ace_button::ButtonConfig::kFeatureClick);
-    buttonConfigLeft->setFeature(ace_button::ButtonConfig::kFeatureSuppressClickBeforeDoubleClick);
-    buttonConfigLeft->setFeature(ace_button::ButtonConfig::kFeatureDoubleClick);
     buttonConfigLeft->setFeature(ace_button::ButtonConfig::kFeatureLongPress);
     buttonConfigLeft->setEventHandler(handleEventBridge);
 
     ace_button::ButtonConfig* buttonConfigRight = m_buttonRight.getButtonConfig();
-    buttonConfigRight->setFeature(ace_button::ButtonConfig::kFeatureClick);
-    buttonConfigRight->setFeature(ace_button::ButtonConfig::kFeatureSuppressClickBeforeDoubleClick);
-    buttonConfigRight->setFeature(ace_button::ButtonConfig::kFeatureDoubleClick);
     buttonConfigRight->setFeature(ace_button::ButtonConfig::kFeatureLongPress);
     buttonConfigRight->setEventHandler(handleEventBridge);
 }
