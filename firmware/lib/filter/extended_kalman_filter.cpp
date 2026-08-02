@@ -171,10 +171,22 @@ void ExtendedKalmanFilter::update(float sensor_readings[9], DipoleModel& dipole_
     }
 
     float h_x[9];
+    float y[9];
+    float innovation_norm_sq = 0.0f;
+    auto update_innovation = [&]() {
+        innovation_norm_sq = 0.0f;
+        for (int i = 0; i < 9; ++i) {
+            const float diff = sensor_readings[i] - h_x[i];
+            y[i] = std::isfinite(diff) ? diff : 0.0f;
+            innovation_norm_sq += y[i] * y[i];
+        }
+    };
+
 #if EKF_JACOBIAN_REUSE_ENABLE
     PERFORMANCE_BEGIN(1, PerformanceProfiler::Section::EKF_MODEL_HX);
     dipole_model.get_expected_readings(m_x[0], m_x[1], m_x[2], m_x[3], m_x[4], m_x[5], h_x);
     PERFORMANCE_END(1, PerformanceProfiler::Section::EKF_MODEL_HX);
+    update_innovation();
 #endif
 
     ++m_update_counter;
@@ -223,15 +235,8 @@ void ExtendedKalmanFilter::update(float sensor_readings[9], DipoleModel& dipole_
 #if !EKF_JACOBIAN_REUSE_ENABLE
     PERFORMANCE_BEGIN(1, PerformanceProfiler::Section::EKF_MODEL_HX);
     PERFORMANCE_END(1, PerformanceProfiler::Section::EKF_MODEL_HX);
+    update_innovation();
 #endif
-
-    float y[9];
-    float innovation_norm_sq = 0.0f;
-    for (int i = 0; i < 9; ++i) {
-        float diff = sensor_readings[i] - h_x[i];
-        y[i] = std::isfinite(diff) ? diff : 0.0f;
-        innovation_norm_sq += y[i] * y[i];
-    }
 
     float (*H)[12] = m_cached_H;
 
