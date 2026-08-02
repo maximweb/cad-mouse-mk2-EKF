@@ -7,8 +7,6 @@ This is an alternative implementation for the awesome CAD Mouse MK2
 
 I opted for a reimplementation rather than a fork because I wanted to learn how it works. Yet, several features closely follow the original implementation.
 
-There is still some work do be done, but **I get consistent 250 Hz of HID data** despite heavy processing.
-
 ## Hardware
 
 I chose a (pin compatible) SeeedStudio XIAO RP2350 instead of the original RP2040 because the former has
@@ -18,6 +16,24 @@ I chose a (pin compatible) SeeedStudio XIAO RP2350 instead of the original RP204
 
 The PCB is a preassembled one I bought. Only hickup was a broken LED.
 Hence my config.h contains setting for 7 instead of original 8 LEDs.
+
+## PlatformIO Environments
+
+The project now provides two PlatformIO environments:
+
+- `RP2040`
+- `RP2350`
+
+`RP2350` is currently the default environment in `platformio.ini`.
+
+## Performance Status
+
+- **RP2040 (after recent performance improvements):**
+  - Filter runtime is roughly **6.6 ms** on average.
+  - HID report interval is set to **7 ms**, which corresponds to about **142.9 Hz**.
+- **RP2350 (before recent performance improvements):**
+  - HID report interval was set to **4 ms** (**250 Hz**), with a noted Core1 roundtrip time of about **2 ms** (from `config.h` comment).
+  - Post-improvement numbers on RP2350 are not measured yet.
 
 ## Features
 
@@ -57,16 +73,6 @@ Calibration is done in firmware by
 - persisting the calibration results to file with LittleFS
 
 Initial start triggers calibration and attempts to store it to LittleFS. Consecutive calibrations can be manually triggered by long press of both buttons simultaneously.
-
-## ToDo
-
-Open Points I still intent to address but especially reagrding the HID-Controller configuration, I appreciate any inputs.
-
-- [ ] ButtonController: Remove unused states (we only need press, release, and longpress)
-- [ ] HID-Controller
-  - [ ] Generally not yet sure how to configure HID properly, to get the best experience. Needs input/investigation
-  - [ ] Amend report to contain only two buttons
-- [ ] Move all magic numbers to config.h
 
 
 # CAD Mouse MK2 - Original
