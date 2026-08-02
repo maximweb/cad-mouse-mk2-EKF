@@ -93,6 +93,7 @@
 
 // Debugging via Serial
 // Uncomment any of the following lines to enable serial debug output for the corresponding module
+// #define ENABLE_PERFORMANCE_PROFILING 1
 // #define _MAIN_SERIAL_DEBUG 1
 // #define _MAIN_SERIAL_PRINT_CORE1_DURATION 1
 // #define _STATE_MACHINE_SERIAL_DEBUG 1

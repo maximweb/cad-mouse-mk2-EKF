@@ -10,6 +10,7 @@
 #include "hid_controller.h"
 #include "led_controller.h"
 #include "normalization.h"
+#include "performance_profiler.h"
 #include "state_machine.h"
 
 #ifdef _MAIN_SERIAL_DEBUG
@@ -197,7 +198,7 @@ void loop()
                 latest_estimated_state[10] = sharedFilteredData.vry;
                 latest_estimated_state[11] = sharedFilteredData.vrz;
 
-#ifdef _MAIN_SERIAL_PRINT_CORE1_DURATION || _MAIN_SERIAL_DEBUG
+#if defined(_MAIN_SERIAL_PRINT_CORE1_DURATION) || defined(_MAIN_SERIAL_DEBUG)
                 // Print roundtrip time between consecutive readings->filtering->return
                 // Implies frequency of HID updates must be less than this
                 float dt_ms = sharedFilteredData.dt * 1e3;
@@ -220,10 +221,13 @@ void loop()
                 // 3 = has finished processing and is now idle
 
                 // Read sensor data and store in shared memory
+                PERFORMANCE_BEGIN(0, PerformanceProfiler::Section::CORE0_SENSOR_READ);
                 sensor_status = hallController.read(rawSensorData);
+                PERFORMANCE_END(0, PerformanceProfiler::Section::CORE0_SENSOR_READ);
 
                 if (sensor_status) {
                     // Store in shared memory for Core 1 to access
+                    PERFORMANCE_BEGIN(0, PerformanceProfiler::Section::CORE0_HANDOVER);
                     for (int i = 0; i < 9; ++i) {
                         sharedRawSensorData.rawData[i] = rawSensorData[i];
                     }
@@ -231,6 +235,7 @@ void loop()
 
                     __dmb();             // Ensure memory is written before signaling Core 1
                     core_sync_state = 2; // 2 = Core 0 has new data ready for Core 1 to process
+                    PERFORMANCE_END(0, PerformanceProfiler::Section::CORE0_HANDOVER);
                 }
             }
 
@@ -316,6 +321,10 @@ void loop()
 
     // LED controller update
     ledController.update();
+
+#ifdef ENABLE_PERFORMANCE_PROFILING
+    PerformanceProfiler::print_if_due(0, now, 1000);
+#endif
 }
 
 void setup1()
@@ -368,14 +377,21 @@ void loop1()
     }
 
     // Local copy to isolate processing memory
+    PERFORMANCE_BEGIN(1, PerformanceProfiler::Section::CORE1_TOTAL);
+
     float local_raw[9];
     for (int i = 0; i < 9; ++i) {
         local_raw[i] = sharedRawSensorData.rawData[i];
     }
 
     // Step the Kalman Filter math engine forward
+    PERFORMANCE_BEGIN(1, PerformanceProfiler::Section::CORE1_PREDICT);
     ekf.predict(dt);
+    PERFORMANCE_END(1, PerformanceProfiler::Section::CORE1_PREDICT);
+
+    PERFORMANCE_BEGIN(1, PerformanceProfiler::Section::CORE1_UPDATE);
     ekf.update(local_raw, dipoleModel);
+    PERFORMANCE_END(1, PerformanceProfiler::Section::CORE1_UPDATE);
 
     // Extract the filtered pose from the EKF state vector
     float estimated_state[12];
@@ -387,7 +403,9 @@ void loop1()
     // - applies deadzone to trans vector magnitude and rot vector magnitude
     // - applies curved isolation over all 6 DoF combined (power law + renormalization) and applies same factor to velocities
     float deadzone_normalized_state[12];
+    PERFORMANCE_BEGIN(1, PerformanceProfiler::Section::CORE1_NORMALIZATION);
     Normalization::apply_normalization_deadzone_isolation(estimated_state, deadzone_normalized_state);
+    PERFORMANCE_END(1, PerformanceProfiler::Section::CORE1_NORMALIZATION);
 
     // Store the processed state in shared memory for Core 0 to access
     sharedFilteredData.x = deadzone_normalized_state[0];
@@ -408,4 +426,10 @@ void loop1()
 
     // Once done processing, signal back to Core 0 that processing is complete
     core_sync_state = 3; // 3 = Core 1 has finished processing and filtered data is ready
+
+    PERFORMANCE_END(1, PerformanceProfiler::Section::CORE1_TOTAL);
+
+#ifdef ENABLE_PERFORMANCE_PROFILING
+    PerformanceProfiler::print_if_due(1, millis(), 1000);
+#endif
 }

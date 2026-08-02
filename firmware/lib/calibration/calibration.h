@@ -3,9 +3,8 @@
 #include "config.h"
 
 #include <Arduino.h>
-#include <LittleFS.h>
 
-#include "dipole_model.h"
+class DipoleModel;
 
 // Uncomment the following line to enable serial debug output for the Calibration class
 // #define _CALIBRATION_SERIAL_DEBUG 1

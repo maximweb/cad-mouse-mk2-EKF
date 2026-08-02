@@ -2,7 +2,7 @@
 
 #include <Arduino.h>
 
-#include "calibration.h"
+struct CalibrationData;
 
 namespace Helpers {
     void print_raw_sensor_data(float rawSensorData[9]);

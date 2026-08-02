@@ -1,5 +1,8 @@
 #include "calibration.h"
 
+#include "dipole_model.h"
+#include <LittleFS.h>
+
 static struct {
     float sum[9] = {0};
     float sq_sum[9] = {0};

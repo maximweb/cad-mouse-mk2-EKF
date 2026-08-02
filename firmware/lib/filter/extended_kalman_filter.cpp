@@ -1,4 +1,5 @@
 #include "extended_kalman_filter.h"
+#include "performance_profiler.h"
 #include <algorithm> // for std::isfinite
 #include <cmath>
 #include <cstring>
@@ -129,10 +130,14 @@ void ExtendedKalmanFilter::update(float sensor_readings[9], DipoleModel& dipole_
     }
 
     float H[9][12];
+    PERFORMANCE_BEGIN(1, PerformanceProfiler::Section::EKF_JACOBIAN);
     compute_jacobian(m_x, H, dipole_model);
+    PERFORMANCE_END(1, PerformanceProfiler::Section::EKF_JACOBIAN);
 
     float h_x[9];
+    PERFORMANCE_BEGIN(1, PerformanceProfiler::Section::EKF_MODEL_HX);
     dipole_model.get_expected_readings(m_x[0], m_x[1], m_x[2], m_x[3], m_x[4], m_x[5], h_x);
+    PERFORMANCE_END(1, PerformanceProfiler::Section::EKF_MODEL_HX);
 
     float y[9];
     for (int i = 0; i < 9; ++i) {
@@ -148,6 +153,7 @@ void ExtendedKalmanFilter::update(float sensor_readings[9], DipoleModel& dipole_
 #endif
 
     float HP[9][12] = {0};
+    PERFORMANCE_BEGIN(1, PerformanceProfiler::Section::EKF_HP);
     for (int i = 0; i < 9; ++i) {
         for (int j = 0; j < 12; ++j) {
             for (int k = 0; k < 12; ++k) {
@@ -155,8 +161,10 @@ void ExtendedKalmanFilter::update(float sensor_readings[9], DipoleModel& dipole_
             }
         }
     }
+    PERFORMANCE_END(1, PerformanceProfiler::Section::EKF_HP);
 
     float S[9][9] = {0};
+    PERFORMANCE_BEGIN(1, PerformanceProfiler::Section::EKF_S);
     for (int i = 0; i < 9; ++i) {
         for (int j = 0; j < 9; ++j) {
             for (int k = 0; k < 12; ++k) {
@@ -166,11 +174,13 @@ void ExtendedKalmanFilter::update(float sensor_readings[9], DipoleModel& dipole_
                 S[i][j] += m_R_var;
         }
     }
+    PERFORMANCE_END(1, PerformanceProfiler::Section::EKF_S);
 
     // --- 1. STABILIZED CHOLESKY DECOMPOSITION ---
     float L[9][9] = {0};
     const float eps = 1e-3f;
 
+    PERFORMANCE_BEGIN(1, PerformanceProfiler::Section::EKF_CHOLESKY);
     for (int i = 0; i < 9; i++) {
         for (int j = 0; j <= i; j++) {
             float sum = 0;
@@ -188,6 +198,7 @@ void ExtendedKalmanFilter::update(float sensor_readings[9], DipoleModel& dipole_
             }
         }
     }
+    PERFORMANCE_END(1, PerformanceProfiler::Section::EKF_CHOLESKY);
 
 #ifdef _KALMAN_FILTER_SERIAL_DEBUG
     Serial.print("[DEBUG] Matrix S Diagonal [0]: ");
@@ -197,6 +208,7 @@ void ExtendedKalmanFilter::update(float sensor_readings[9], DipoleModel& dipole_
 #endif
 
     // --- 2. SOLVE S * iY = y ---
+    PERFORMANCE_BEGIN(1, PerformanceProfiler::Section::EKF_SOLVE_IY);
     float iY_temp[9] = {0};
     for (int i = 0; i < 9; i++) {
         float sum = 0;
@@ -211,6 +223,7 @@ void ExtendedKalmanFilter::update(float sensor_readings[9], DipoleModel& dipole_
             sum += L[k][i] * iY[k];
         iY[i] = (iY_temp[i] - sum) / L[i][i];
     }
+    PERFORMANCE_END(1, PerformanceProfiler::Section::EKF_SOLVE_IY);
 
     // FIX / OPTIMIZATION: Since we strictly maintain P as symmetric, P * H^T is
     // exactly the transpose of H * P. We can skip 1,296 multiplications completely!
@@ -222,6 +235,7 @@ void ExtendedKalmanFilter::update(float sensor_readings[9], DipoleModel& dipole_
     }
 
     // --- 3. STATE UPDATE ---
+    PERFORMANCE_BEGIN(1, PerformanceProfiler::Section::EKF_STATE_CORRECTION);
     for (int i = 0; i < 12; ++i) {
         float correction = 0.0f;
         for (int j = 0; j < 9; ++j)
@@ -231,8 +245,10 @@ void ExtendedKalmanFilter::update(float sensor_readings[9], DipoleModel& dipole_
             m_x[i] += correction;
         }
     }
+    PERFORMANCE_END(1, PerformanceProfiler::Section::EKF_STATE_CORRECTION);
 
     // --- 4. UPDATE COVARIANCE MATRIX ---
+    PERFORMANCE_BEGIN(1, PerformanceProfiler::Section::EKF_COVARIANCE_UPDATE);
     float K[12][9] = {0};
     for (int row = 0; row < 12; ++row) {
         float row_temp[9] = {0};
@@ -275,6 +291,7 @@ void ExtendedKalmanFilter::update(float sensor_readings[9], DipoleModel& dipole_
             m_P[i][i] = 1e-6f;
         }
     }
+    PERFORMANCE_END(1, PerformanceProfiler::Section::EKF_COVARIANCE_UPDATE);
 }
 
 void ExtendedKalmanFilter::get_state(float state_out[12])

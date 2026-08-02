@@ -1,6 +1,7 @@
 #include "config.h"
 
 #include "dipole_model.h"
+#include "performance_profiler.h"
 
 DipoleModel::DipoleModel()
 : m_scaled_magnetic_moments{
@@ -42,6 +43,8 @@ void DipoleModel::get_offsets(float offsets[6])
 
 void DipoleModel::get_expected_readings(float x, float y, float z, float rx, float ry, float rz, float readings[9])
 {
+    PERFORMANCE_BEGIN(1, PerformanceProfiler::Section::DIPOLE_TOTAL);
+
     // Apply offsets to the input position and rotation
     x += m_offsets[0];
     y += m_offsets[1];
@@ -61,6 +64,7 @@ void DipoleModel::get_expected_readings(float x, float y, float z, float rx, flo
 #endif
 
     // Precompute sin and cos for rotation angles
+    PERFORMANCE_BEGIN(1, PerformanceProfiler::Section::DIPOLE_ROTATION);
     float cx = cosf(rx);
     float sx = sinf(rx);
     float cy = cosf(ry);
@@ -79,6 +83,7 @@ void DipoleModel::get_expected_readings(float x, float y, float z, float rx, flo
     R[2][0] = -sy;
     R[2][1] = sx * cy;
     R[2][2] = cx * cy;
+    PERFORMANCE_END(1, PerformanceProfiler::Section::DIPOLE_ROTATION);
 
     // TODO Test print rotation matrix R
 #ifdef _DIPOLE_MODEL_SERIAL_DEBUG
@@ -113,6 +118,7 @@ void DipoleModel::get_expected_readings(float x, float y, float z, float rx, flo
     }
 
     // Calculate dipole superposition for each magnet and sensor
+    PERFORMANCE_BEGIN(1, PerformanceProfiler::Section::DIPOLE_SUPERPOSITION);
     for (int i_magnet = 0; i_magnet < 3; ++i_magnet) {
         // First rotate, then translate
         float magnet_x = R[0][0] * m_magnet_neutral_positions[i_magnet][0] + R[0][1] * m_magnet_neutral_positions[i_magnet][1] + R[0][2] * m_magnet_neutral_positions[i_magnet][2] + x;
@@ -205,6 +211,7 @@ void DipoleModel::get_expected_readings(float x, float y, float z, float rx, flo
             readings[i_sensor * 3 + 2] += m_scaled_magnetic_moments[i_magnet] * r_pow5_inv * (3.0f * m_dot_r * r_z - dipole_z * r2);
         }
     }
+    PERFORMANCE_END(1, PerformanceProfiler::Section::DIPOLE_SUPERPOSITION);
 
 // TODO Test print expected readings
 #ifdef _DIPOLE_MODEL_SERIAL_DEBUG
@@ -220,4 +227,6 @@ void DipoleModel::get_expected_readings(float x, float y, float z, float rx, flo
         Serial.println(readings[i * 3 + 2], 6);
     }
 #endif
+
+    PERFORMANCE_END(1, PerformanceProfiler::Section::DIPOLE_TOTAL);
 }
