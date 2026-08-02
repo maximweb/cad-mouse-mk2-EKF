@@ -237,16 +237,20 @@ void ExtendedKalmanFilter::update(float sensor_readings[9], DipoleModel& dipole_
     float HP_vel[9][6] = {0};  // columns 6..11 of H*P
     PERFORMANCE_BEGIN(1, PerformanceProfiler::Section::EKF_HP);
     for (int i = 0; i < 9; ++i) {
-        for (int j = 0; j < 6; ++j) {
-            float sum_pose = 0.0f;
-            float sum_vel = 0.0f;
-            for (int k = 0; k < 6; ++k) {
-                const float h_ik = H[i][k];
-                sum_pose += h_ik * m_P[k][j];
-                sum_vel += h_ik * m_P[k][j + 6];
+        float sum_pose[6] = {0};
+        float sum_vel[6] = {0};
+
+        for (int k = 0; k < 6; ++k) {
+            const float h_ik = H[i][k];
+            for (int j = 0; j < 6; ++j) {
+                sum_pose[j] += h_ik * m_P[k][j];
+                sum_vel[j] += h_ik * m_P[k][j + 6];
             }
-            HP_pose[i][j] = sum_pose;
-            HP_vel[i][j] = sum_vel;
+        }
+
+        for (int j = 0; j < 6; ++j) {
+            HP_pose[i][j] = sum_pose[j];
+            HP_vel[i][j] = sum_vel[j];
         }
     }
     PERFORMANCE_END(1, PerformanceProfiler::Section::EKF_HP);
@@ -254,14 +258,18 @@ void ExtendedKalmanFilter::update(float sensor_readings[9], DipoleModel& dipole_
     float S[9][9] = {0};
     PERFORMANCE_BEGIN(1, PerformanceProfiler::Section::EKF_S);
     for (int i = 0; i < 9; ++i) {
-        for (int j = 0; j < 9; ++j) {
+        for (int j = i; j < 9; ++j) {
             float sum = 0.0f;
             for (int k = 0; k < 6; ++k) {
                 sum += HP_pose[i][k] * H[j][k];
             }
+            if (i == j) {
+                sum += m_R_var;
+            }
             S[i][j] = sum;
-            if (i == j)
-                S[i][j] += m_R_var;
+            if (j != i) {
+                S[j][i] = sum;
+            }
         }
     }
     PERFORMANCE_END(1, PerformanceProfiler::Section::EKF_S);
