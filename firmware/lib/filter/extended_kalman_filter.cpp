@@ -28,6 +28,11 @@ void ExtendedKalmanFilter::init(const float initial_state[6], float process_nois
     m_Q_rot = 0.01f * process_noise_std;
     m_Q_vel = 1.0f * process_noise_std;
     m_Q_ang_vel = 1.0f * process_noise_std;
+
+    std::memset(m_cached_H, 0, sizeof(m_cached_H));
+    m_cached_H_valid = false;
+    m_update_counter = 0;
+    m_jacobian_reuse_streak = 0;
 }
 
 void ExtendedKalmanFilter::predict(float dt)
@@ -129,27 +134,66 @@ void ExtendedKalmanFilter::update(float sensor_readings[9], DipoleModel& dipole_
             return;
     }
 
-    float H[9][12];
-    PERFORMANCE_BEGIN(1, PerformanceProfiler::Section::EKF_JACOBIAN);
-    compute_jacobian(m_x, H, dipole_model);
-    PERFORMANCE_END(1, PerformanceProfiler::Section::EKF_JACOBIAN);
-
     float h_x[9];
     PERFORMANCE_BEGIN(1, PerformanceProfiler::Section::EKF_MODEL_HX);
     dipole_model.get_expected_readings(m_x[0], m_x[1], m_x[2], m_x[3], m_x[4], m_x[5], h_x);
     PERFORMANCE_END(1, PerformanceProfiler::Section::EKF_MODEL_HX);
 
     float y[9];
+    float innovation_norm_sq = 0.0f;
     for (int i = 0; i < 9; ++i) {
         float diff = sensor_readings[i] - h_x[i];
         y[i] = std::isfinite(diff) ? diff : 0.0f;
+        innovation_norm_sq += y[i] * y[i];
     }
+
+    ++m_update_counter;
+    bool should_recompute_jacobian = !m_cached_H_valid;
+
+#if EKF_JACOBIAN_REUSE_ENABLE
+    if (!should_recompute_jacobian) {
+        if (EKF_JACOBIAN_RECOMPUTE_INTERVAL > 0 && (m_update_counter % EKF_JACOBIAN_RECOMPUTE_INTERVAL) == 0) {
+            should_recompute_jacobian = true;
+        }
+
+        if (!should_recompute_jacobian && EKF_JACOBIAN_INNOVATION_THRESHOLD > 0.0f) {
+            const float innovation_threshold_sq = EKF_JACOBIAN_INNOVATION_THRESHOLD * EKF_JACOBIAN_INNOVATION_THRESHOLD;
+            if (innovation_norm_sq > innovation_threshold_sq) {
+                should_recompute_jacobian = true;
+            }
+        }
+
+        if (!should_recompute_jacobian && m_jacobian_reuse_streak >= EKF_JACOBIAN_MAX_REUSE_STREAK) {
+            should_recompute_jacobian = true;
+        }
+    }
+#else
+    should_recompute_jacobian = true;
+#endif
+
+    PERFORMANCE_BEGIN(1, PerformanceProfiler::Section::EKF_JACOBIAN);
+    if (should_recompute_jacobian) {
+        compute_jacobian(m_x, m_cached_H, dipole_model);
+        m_cached_H_valid = true;
+        m_jacobian_reuse_streak = 0;
+    }
+    else {
+        ++m_jacobian_reuse_streak;
+    }
+    PERFORMANCE_END(1, PerformanceProfiler::Section::EKF_JACOBIAN);
+
+    float (*H)[12] = m_cached_H;
 
 #ifdef _KALMAN_FILTER_SERIAL_DEBUG
     Serial.print("[DEBUG] Residual Y[0]: ");
     Serial.print(y[0]);
     Serial.print(" | h_x[0]: ");
     Serial.println(h_x[0]);
+
+    Serial.print("[DEBUG] Jacobian recompute: ");
+    Serial.print(should_recompute_jacobian ? "yes" : "no");
+    Serial.print(" | reuse_streak: ");
+    Serial.println(m_jacobian_reuse_streak);
 #endif
 
     // Measurement model depends only on pose states (0..5), so H = [H_pose, 0].

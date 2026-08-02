@@ -48,6 +48,13 @@
 #define EKF_PROCESS_NOISE_STD 1.0f // Standard deviation for process noise
 #define EKF_SENSOR_NOISE_STD 5.0f  // Standard deviation for sensor noise
 
+// Jacobian reuse gating (M1 optimization)
+// Jacobian recomputation is triggered if any of the configured criteria requires it.
+#define EKF_JACOBIAN_REUSE_ENABLE 1
+#define EKF_JACOBIAN_RECOMPUTE_INTERVAL 2       // Recompute every N updates (0 disables interval trigger)
+#define EKF_JACOBIAN_INNOVATION_THRESHOLD 10.0f // Recompute when ||y||_2 exceeds this threshold (<= 0 disables threshold trigger)
+#define EKF_JACOBIAN_MAX_REUSE_STREAK 2         // Force recompute after this many reuse-only updates
+
 // Normalization, Deadzone, and Isolation
 #define NORMALIZATION_X_MAX 1.7f  // Maximum translation in mm for normalization
 #define NORMALIZATION_Y_MAX 1.7f  // Maximum translation in mm for normalization

@@ -28,6 +28,12 @@ private:
     // Sensor noise covariance matrix spectral density
     float m_R_var;
 
+    // Cached Jacobian and gating state for configurable reuse optimization.
+    float m_cached_H[9][12];
+    bool m_cached_H_valid = false;
+    uint32_t m_update_counter = 0;
+    uint8_t m_jacobian_reuse_streak = 0;
+
     // Helper function for Jacobian calculation
     void compute_jacobian(const float state[12], float H[9][12], DipoleModel& dipole_model);
 };
