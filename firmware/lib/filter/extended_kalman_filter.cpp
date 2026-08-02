@@ -152,13 +152,22 @@ void ExtendedKalmanFilter::update(float sensor_readings[9], DipoleModel& dipole_
     Serial.println(h_x[0]);
 #endif
 
-    float HP[9][12] = {0};
+    // Measurement model depends only on pose states (0..5), so H = [H_pose, 0].
+    // Exploit this sparsity to reduce multiplications in HP and S.
+    float HP_pose[9][6] = {0}; // columns 0..5 of H*P
+    float HP_vel[9][6] = {0};  // columns 6..11 of H*P
     PERFORMANCE_BEGIN(1, PerformanceProfiler::Section::EKF_HP);
     for (int i = 0; i < 9; ++i) {
-        for (int j = 0; j < 12; ++j) {
-            for (int k = 0; k < 12; ++k) {
-                HP[i][j] += H[i][k] * m_P[k][j];
+        for (int j = 0; j < 6; ++j) {
+            float sum_pose = 0.0f;
+            float sum_vel = 0.0f;
+            for (int k = 0; k < 6; ++k) {
+                const float h_ik = H[i][k];
+                sum_pose += h_ik * m_P[k][j];
+                sum_vel += h_ik * m_P[k][j + 6];
             }
+            HP_pose[i][j] = sum_pose;
+            HP_vel[i][j] = sum_vel;
         }
     }
     PERFORMANCE_END(1, PerformanceProfiler::Section::EKF_HP);
@@ -167,9 +176,11 @@ void ExtendedKalmanFilter::update(float sensor_readings[9], DipoleModel& dipole_
     PERFORMANCE_BEGIN(1, PerformanceProfiler::Section::EKF_S);
     for (int i = 0; i < 9; ++i) {
         for (int j = 0; j < 9; ++j) {
-            for (int k = 0; k < 12; ++k) {
-                S[i][j] += HP[i][k] * H[j][k];
+            float sum = 0.0f;
+            for (int k = 0; k < 6; ++k) {
+                sum += HP_pose[i][k] * H[j][k];
             }
+            S[i][j] = sum;
             if (i == j)
                 S[i][j] += m_R_var;
         }
@@ -225,12 +236,12 @@ void ExtendedKalmanFilter::update(float sensor_readings[9], DipoleModel& dipole_
     }
     PERFORMANCE_END(1, PerformanceProfiler::Section::EKF_SOLVE_IY);
 
-    // FIX / OPTIMIZATION: Since we strictly maintain P as symmetric, P * H^T is
-    // exactly the transpose of H * P. We can skip 1,296 multiplications completely!
+    // Since P is symmetric, P*H^T equals transpose(H*P). Build it from sparse HP blocks.
     float PH_T[12][9];
-    for (int i = 0; i < 12; ++i) {
-        for (int j = 0; j < 9; ++j) {
-            PH_T[i][j] = HP[j][i];
+    for (int j = 0; j < 9; ++j) {
+        for (int i = 0; i < 6; ++i) {
+            PH_T[i][j] = HP_pose[j][i];
+            PH_T[i + 6][j] = HP_vel[j][i];
         }
     }
 
@@ -266,17 +277,18 @@ void ExtendedKalmanFilter::update(float sensor_readings[9], DipoleModel& dipole_
         }
     }
 
-    float KHP[12][12] = {0};
+    // Direct covariance update without materializing a 12x12 temporary KHP matrix.
     for (int i = 0; i < 12; ++i) {
-        for (int j = 0; j < 12; ++j) {
-            for (int k = 0; k < 9; ++k)
-                KHP[i][j] += K[i][k] * HP[k][j];
-        }
-    }
-
-    for (int i = 0; i < 12; ++i) {
-        for (int j = 0; j < 12; ++j) {
-            m_P[i][j] -= KHP[i][j];
+        for (int j = 0; j < 6; ++j) {
+            float delta_pose = 0.0f;
+            float delta_vel = 0.0f;
+            for (int k = 0; k < 9; ++k) {
+                const float k_ik = K[i][k];
+                delta_pose += k_ik * HP_pose[k][j];
+                delta_vel += k_ik * HP_vel[k][j];
+            }
+            m_P[i][j] -= delta_pose;
+            m_P[i][j + 6] -= delta_vel;
         }
     }
 
