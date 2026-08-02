@@ -39,20 +39,19 @@ HIDController hidController = HIDController();
     SHARED DATA STRUCTURES FOR CORE 0 AND CORE 1 COMMUNICATION
 */
 
-// 0 = Core 1 is uninitialized
-// 1 = Core 1 is ready but has not received any data from Core 0 yet
-// 2 = Core 0 has new data ready for Core 1 to process
-// 3 = Core 1 has finished processing and filtered data is ready
-volatile uint8_t core_sync_state = 0;
+// Seqlock counters for lock-free single-writer/single-reader mailboxes.
+// Even value: stable payload, odd value: writer is updating payload.
+volatile uint32_t raw_mailbox_seq = 0;
+volatile uint32_t filtered_mailbox_seq = 0;
 
-// Shared raw sensor data for Core 0 to Core 1 communication
+// Shared raw sensor data mailbox (Core 0 producer -> Core 1 consumer)
 struct RawSensorData {
     float rawData[9];      // 3 sensors, each with 3 axes (X, Y, Z)
     uint32_t timestamp_us; // Timestamp of the last update in microseconds
 };
 volatile RawSensorData sharedRawSensorData;
 
-// Shared filtered sensor data for Core 1 to Core 0 communication
+// Shared filtered data mailbox (Core 1 producer -> Core 0 consumer)
 struct FilteredData {
     float x, y, z;       // Filtered translation data
     float rx, ry, rz;    // Filtered rotation data
@@ -69,6 +68,72 @@ volatile FilteredData sharedFilteredData;
 */
 
 float latest_estimated_state[12] = {0.0f};
+
+#if defined(ENABLE_PERFORMANCE_PROFILING) && (PERFORMANCE_PROFILING_LEVEL == 1)
+namespace {
+    uint32_t g_lite_last_filtered_arrival_us = 0;
+    uint64_t g_lite_sum_interval_us = 0;
+    uint32_t g_lite_interval_count = 0;
+    uint32_t g_lite_min_interval_us = 0;
+    uint32_t g_lite_max_interval_us = 0;
+    uint32_t g_lite_last_print_ms = 0;
+
+    void lite_profiler_on_new_filtered_value(uint32_t now_ms)
+    {
+        const uint32_t now_us = micros();
+
+        if (g_lite_last_filtered_arrival_us != 0) {
+            const uint32_t dt_us = now_us - g_lite_last_filtered_arrival_us;
+            g_lite_sum_interval_us += dt_us;
+            g_lite_interval_count += 1;
+
+            if (g_lite_min_interval_us == 0 || dt_us < g_lite_min_interval_us) {
+                g_lite_min_interval_us = dt_us;
+            }
+            if (dt_us > g_lite_max_interval_us) {
+                g_lite_max_interval_us = dt_us;
+            }
+        }
+        g_lite_last_filtered_arrival_us = now_us;
+
+        if (g_lite_last_print_ms == 0) {
+            g_lite_last_print_ms = now_ms;
+            return;
+        }
+
+        if ((now_ms - g_lite_last_print_ms) < PERFORMANCE_PRINT_INTERVAL_MS) {
+            return;
+        }
+
+        g_lite_last_print_ms = now_ms;
+        if (g_lite_interval_count == 0) {
+            return;
+        }
+
+        const float avg_interval_us = static_cast<float>(g_lite_sum_interval_us) / static_cast<float>(g_lite_interval_count);
+        const float avg_hz = 1000000.0f / avg_interval_us;
+
+        Serial.println("[PERFORMANCE][light]");
+        Serial.print("  filtered_interval_avg_us: ");
+        Serial.printf("%.2f", avg_interval_us);
+        Serial.println();
+        Serial.print("  filtered_rate_avg_hz: ");
+        Serial.printf("%.2f", avg_hz);
+        Serial.println();
+        Serial.print("  filtered_interval_min_us: ");
+        Serial.print(g_lite_min_interval_us);
+        Serial.println();
+        Serial.print("  filtered_interval_max_us: ");
+        Serial.print(g_lite_max_interval_us);
+        Serial.println();
+
+        g_lite_sum_interval_us = 0;
+        g_lite_interval_count = 0;
+        g_lite_min_interval_us = 0;
+        g_lite_max_interval_us = 0;
+    }
+}
+#endif
 
 void setup()
 {
@@ -178,30 +243,63 @@ void loop()
             // read raw sensor data, send to Core 1 for processing
             // TODO: Send via HID to host computer
 
-            // Check Core 1 for available filtered data
-            if (core_sync_state == 3) {
-                // Core 1 has finished processing and is now idle
-                // Read the filtered pose from shared memory
+            // Consume latest filtered data using seqlock snapshot.
+            static uint32_t last_filtered_seq = 0;
+            uint32_t filtered_s1 = 0;
+            uint32_t filtered_s2 = 0;
+            FilteredData local_filtered = {};
+
+            do {
+                filtered_s1 = filtered_mailbox_seq;
+                if (filtered_s1 & 1u) {
+                    continue;
+                }
+
+                __dmb();
+                local_filtered.x = sharedFilteredData.x;
+                local_filtered.y = sharedFilteredData.y;
+                local_filtered.z = sharedFilteredData.z;
+                local_filtered.rx = sharedFilteredData.rx;
+                local_filtered.ry = sharedFilteredData.ry;
+                local_filtered.rz = sharedFilteredData.rz;
+                local_filtered.vx = sharedFilteredData.vx;
+                local_filtered.vy = sharedFilteredData.vy;
+                local_filtered.vz = sharedFilteredData.vz;
+                local_filtered.vrx = sharedFilteredData.vrx;
+                local_filtered.vry = sharedFilteredData.vry;
+                local_filtered.vrz = sharedFilteredData.vrz;
+                local_filtered.dt = sharedFilteredData.dt;
+                __dmb();
+
+                filtered_s2 = filtered_mailbox_seq;
+            } while ((filtered_s1 != filtered_s2) || (filtered_s2 & 1u));
+
+            if (filtered_s2 != 0 && filtered_s2 != last_filtered_seq) {
+                last_filtered_seq = filtered_s2;
 
                 stateMachine.set_last_filtered_data_received_time_ms(now);
 
-                latest_estimated_state[0] = sharedFilteredData.x;
-                latest_estimated_state[1] = sharedFilteredData.y;
-                latest_estimated_state[2] = sharedFilteredData.z;
-                latest_estimated_state[3] = sharedFilteredData.rx;
-                latest_estimated_state[4] = sharedFilteredData.ry;
-                latest_estimated_state[5] = sharedFilteredData.rz;
-                latest_estimated_state[6] = sharedFilteredData.vx;
-                latest_estimated_state[7] = sharedFilteredData.vy;
-                latest_estimated_state[8] = sharedFilteredData.vz;
-                latest_estimated_state[9] = sharedFilteredData.vrx;
-                latest_estimated_state[10] = sharedFilteredData.vry;
-                latest_estimated_state[11] = sharedFilteredData.vrz;
+#if defined(ENABLE_PERFORMANCE_PROFILING) && (PERFORMANCE_PROFILING_LEVEL == 1)
+                lite_profiler_on_new_filtered_value(now);
+#endif
+
+                latest_estimated_state[0] = local_filtered.x;
+                latest_estimated_state[1] = local_filtered.y;
+                latest_estimated_state[2] = local_filtered.z;
+                latest_estimated_state[3] = local_filtered.rx;
+                latest_estimated_state[4] = local_filtered.ry;
+                latest_estimated_state[5] = local_filtered.rz;
+                latest_estimated_state[6] = local_filtered.vx;
+                latest_estimated_state[7] = local_filtered.vy;
+                latest_estimated_state[8] = local_filtered.vz;
+                latest_estimated_state[9] = local_filtered.vrx;
+                latest_estimated_state[10] = local_filtered.vry;
+                latest_estimated_state[11] = local_filtered.vrz;
 
 #if defined(_MAIN_SERIAL_PRINT_CORE1_DURATION) || defined(_MAIN_SERIAL_DEBUG)
                 // Print roundtrip time between consecutive readings->filtering->return
                 // Implies frequency of HID updates must be less than this
-                float dt_ms = sharedFilteredData.dt * 1e3;
+                float dt_ms = local_filtered.dt * 1e3;
                 Serial.print("Filter DT: ");
                 Serial.printf("%.3f", dt_ms);
                 Serial.println(" ms");
@@ -215,28 +313,25 @@ void loop()
 #endif
             }
 
-            // Send new data to Core 1
-            if (core_sync_state == 1 || core_sync_state == 3) {
-                // 1 = is ready, but has never recieved any data
-                // 3 = has finished processing and is now idle
+            // Publish latest raw sample (overwrite mailbox; no queue backlog).
+            PERFORMANCE_BEGIN(0, PerformanceProfiler::Section::CORE0_SENSOR_READ);
+            sensor_status = hallController.read(rawSensorData);
+            PERFORMANCE_END(0, PerformanceProfiler::Section::CORE0_SENSOR_READ);
 
-                // Read sensor data and store in shared memory
-                PERFORMANCE_BEGIN(0, PerformanceProfiler::Section::CORE0_SENSOR_READ);
-                sensor_status = hallController.read(rawSensorData);
-                PERFORMANCE_END(0, PerformanceProfiler::Section::CORE0_SENSOR_READ);
+            if (sensor_status) {
+                PERFORMANCE_BEGIN(0, PerformanceProfiler::Section::CORE0_HANDOVER);
+                const uint32_t seq0 = raw_mailbox_seq;
+                raw_mailbox_seq = seq0 + 1u; // mark write-in-progress (odd)
+                __dmb();
 
-                if (sensor_status) {
-                    // Store in shared memory for Core 1 to access
-                    PERFORMANCE_BEGIN(0, PerformanceProfiler::Section::CORE0_HANDOVER);
-                    for (int i = 0; i < 9; ++i) {
-                        sharedRawSensorData.rawData[i] = rawSensorData[i];
-                    }
-                    sharedRawSensorData.timestamp_us = micros();
-
-                    __dmb();             // Ensure memory is written before signaling Core 1
-                    core_sync_state = 2; // 2 = Core 0 has new data ready for Core 1 to process
-                    PERFORMANCE_END(0, PerformanceProfiler::Section::CORE0_HANDOVER);
+                for (int i = 0; i < 9; ++i) {
+                    sharedRawSensorData.rawData[i] = rawSensorData[i];
                 }
+                sharedRawSensorData.timestamp_us = micros();
+
+                __dmb();
+                raw_mailbox_seq = seq0 + 2u; // mark stable payload (even)
+                PERFORMANCE_END(0, PerformanceProfiler::Section::CORE0_HANDOVER);
             }
 
             // TODO: Send HID data at fixed intervals > dt of Kalman
@@ -322,7 +417,7 @@ void loop()
     // LED controller update
     ledController.update();
 
-#ifdef ENABLE_PERFORMANCE_PROFILING
+#if defined(ENABLE_PERFORMANCE_PROFILING) && (PERFORMANCE_PROFILING_LEVEL >= 2)
     PerformanceProfiler::print_if_due(0, now, PERFORMANCE_PRINT_INTERVAL_MS);
 #endif
 }
@@ -335,41 +430,82 @@ void setup1()
 
 void loop1()
 {
-    // Indicate that Core 1 is ready to receive data from Core 0
-    if (core_sync_state == 0) {
-        core_sync_state = 1; // 1 = Core 1 is ready but has not received any data from Core 0 yet
-    }
+    // Consume latest raw sample using seqlock snapshot.
+    static uint32_t last_time_us = 0;
+    static uint32_t last_raw_seq = 0;
+    static bool is_first_run = true;
 
-    // Bail out if Core 0 never sent any data; or if Core 0 has not yet processed the previous data
-    if (core_sync_state == 1 || core_sync_state == 3) {
+    uint32_t raw_s1 = 0;
+    uint32_t raw_s2 = 0;
+    RawSensorData local_sample = {};
+
+    do {
+        raw_s1 = raw_mailbox_seq;
+        if (raw_s1 & 1u) {
+            continue;
+        }
+
+        __dmb();
+        for (int i = 0; i < 9; ++i) {
+            local_sample.rawData[i] = sharedRawSensorData.rawData[i];
+        }
+        local_sample.timestamp_us = sharedRawSensorData.timestamp_us;
+        __dmb();
+
+        raw_s2 = raw_mailbox_seq;
+    } while ((raw_s1 != raw_s2) || (raw_s2 & 1u));
+
+    if (raw_s2 == 0 || raw_s2 == last_raw_seq) {
         return;
     }
-
-    static uint32_t last_time_us = 0;
-    static bool is_first_run = true;
+    last_raw_seq = raw_s2;
 
     // On first run, we don't have a previous timestamp to calculate dt,
     // but we still can add data to the EKF and establish a baseline.
     if (is_first_run) {
         // Store timestamp of first data
-        last_time_us = sharedRawSensorData.timestamp_us;
+        last_time_us = local_sample.timestamp_us;
         is_first_run = false;
 
         // Update EKF with the first set of raw sensor data to establish a baseline
         float local_raw[9];
         for (int i = 0; i < 9; ++i) {
-            local_raw[i] = sharedRawSensorData.rawData[i];
+            local_raw[i] = local_sample.rawData[i];
         }
         ekf.update(local_raw, dipoleModel);
 
-        // Signal back to Core 0 that the first run is complete and dt can be established
-        multicore_fifo_push_blocking(3);
+        // Publish filtered baseline once so Core 0 can consume it.
+        const uint32_t filtered_seq0 = filtered_mailbox_seq;
+        filtered_mailbox_seq = filtered_seq0 + 1u;
+        __dmb();
+
+        float estimated_state_first[12];
+        float deadzone_normalized_state_first[12];
+        ekf.get_state(estimated_state_first);
+        Normalization::apply_normalization_deadzone_isolation(estimated_state_first, deadzone_normalized_state_first);
+
+        sharedFilteredData.x = deadzone_normalized_state_first[0];
+        sharedFilteredData.y = deadzone_normalized_state_first[1];
+        sharedFilteredData.z = deadzone_normalized_state_first[2];
+        sharedFilteredData.rx = deadzone_normalized_state_first[3];
+        sharedFilteredData.ry = deadzone_normalized_state_first[4];
+        sharedFilteredData.rz = deadzone_normalized_state_first[5];
+        sharedFilteredData.vx = deadzone_normalized_state_first[6];
+        sharedFilteredData.vy = deadzone_normalized_state_first[7];
+        sharedFilteredData.vz = deadzone_normalized_state_first[8];
+        sharedFilteredData.vrx = deadzone_normalized_state_first[9];
+        sharedFilteredData.vry = deadzone_normalized_state_first[10];
+        sharedFilteredData.vrz = deadzone_normalized_state_first[11];
+        sharedFilteredData.dt = 0.0f;
+
+        __dmb();
+        filtered_mailbox_seq = filtered_seq0 + 2u;
         return;
     }
 
     // Calculate dt based on the timestamp of the latest raw sensor data
-    float dt = (sharedRawSensorData.timestamp_us - last_time_us) * 1e-6f; // Convert microseconds to seconds
-    last_time_us = sharedRawSensorData.timestamp_us;
+    float dt = (local_sample.timestamp_us - last_time_us) * 1e-6f; // Convert microseconds to seconds
+    last_time_us = local_sample.timestamp_us;
 
     // Guard against massive timing spikes or clock hiccups
     if (dt <= 0.0f || dt > 0.1f) {
@@ -381,7 +517,7 @@ void loop1()
 
     float local_raw[9];
     for (int i = 0; i < 9; ++i) {
-        local_raw[i] = sharedRawSensorData.rawData[i];
+        local_raw[i] = local_sample.rawData[i];
     }
 
     // Step the Kalman Filter math engine forward
@@ -407,7 +543,11 @@ void loop1()
     Normalization::apply_normalization_deadzone_isolation(estimated_state, deadzone_normalized_state);
     PERFORMANCE_END(1, PerformanceProfiler::Section::CORE1_NORMALIZATION);
 
-    // Store the processed state in shared memory for Core 0 to access
+    // Publish processed state mailbox for Core 0.
+    const uint32_t filtered_seq0 = filtered_mailbox_seq;
+    filtered_mailbox_seq = filtered_seq0 + 1u; // mark write-in-progress
+    __dmb();
+
     sharedFilteredData.x = deadzone_normalized_state[0];
     sharedFilteredData.y = deadzone_normalized_state[1];
     sharedFilteredData.z = deadzone_normalized_state[2];
@@ -422,14 +562,12 @@ void loop1()
     sharedFilteredData.vrz = deadzone_normalized_state[11];
     sharedFilteredData.dt = dt;
 
-    __dmb(); // Ensure values are flushed to RAM
-
-    // Once done processing, signal back to Core 0 that processing is complete
-    core_sync_state = 3; // 3 = Core 1 has finished processing and filtered data is ready
+    __dmb();
+    filtered_mailbox_seq = filtered_seq0 + 2u; // mark stable payload
 
     PERFORMANCE_END(1, PerformanceProfiler::Section::CORE1_TOTAL);
 
-#ifdef ENABLE_PERFORMANCE_PROFILING
+#if defined(ENABLE_PERFORMANCE_PROFILING) && (PERFORMANCE_PROFILING_LEVEL >= 2)
     PerformanceProfiler::print_if_due(1, millis(), PERFORMANCE_PRINT_INTERVAL_MS);
 #endif
 }

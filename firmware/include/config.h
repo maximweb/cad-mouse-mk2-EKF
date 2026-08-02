@@ -93,15 +93,23 @@
 #define HID_REPORT_INTERVAL_MS 4 // 4 ms interval for sending HID reports (250 Hz) current Core 1 roundtrip time is ~2ms
 #else
 #ifdef BOARD_RP2040
-#define HID_REPORT_INTERVAL_MS 12 // 12 ms interval for sending HID reports (83.3 Hz) current Core 1 roundtrip time is ~10.7ms
+#define HID_REPORT_INTERVAL_MS 7 // 7 ms HID interval (~142.9 Hz); RP2040 filter runtime (level-1 light telemetry): avg ~6.61 ms, observed max ~7.90 ms
 #else
 #define HID_REPORT_INTERVAL_MS 20 // Default to 20 ms interval for sending HID reports (50 Hz) for unknown boards
 #endif
 #endif
 
 // Debugging via Serial
-// Uncomment any of the following lines to enable serial debug output for the corresponding module
+// Profiling levels:
+// 0 = off (no profiling overhead in hot paths)
+// 1 = lightweight throughput telemetry only (new filtered values cadence)
+// 2 = detailed section profiling (full PerformanceProfiler as before)
+#define PERFORMANCE_PROFILING_LEVEL 0
+
+#if PERFORMANCE_PROFILING_LEVEL > 0
 #define ENABLE_PERFORMANCE_PROFILING 1
+#endif
+
 #define PERFORMANCE_PRINT_INTERVAL_MS 3000
 // #define _MAIN_SERIAL_DEBUG 1
 // #define _MAIN_SERIAL_PRINT_CORE1_DURATION 1
