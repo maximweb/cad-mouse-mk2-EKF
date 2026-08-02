@@ -323,7 +323,7 @@ void loop()
     ledController.update();
 
 #ifdef ENABLE_PERFORMANCE_PROFILING
-    PerformanceProfiler::print_if_due(0, now, 1000);
+    PerformanceProfiler::print_if_due(0, now, PERFORMANCE_PRINT_INTERVAL_MS);
 #endif
 }
 
@@ -430,6 +430,6 @@ void loop1()
     PERFORMANCE_END(1, PerformanceProfiler::Section::CORE1_TOTAL);
 
 #ifdef ENABLE_PERFORMANCE_PROFILING
-    PerformanceProfiler::print_if_due(1, millis(), 1000);
+    PerformanceProfiler::print_if_due(1, millis(), PERFORMANCE_PRINT_INTERVAL_MS);
 #endif
 }

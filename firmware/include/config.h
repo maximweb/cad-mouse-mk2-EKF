@@ -50,7 +50,7 @@
 
 // Jacobian reuse gating (M1 optimization)
 // Jacobian recomputation is triggered if any of the configured criteria requires it.
-#define EKF_JACOBIAN_REUSE_ENABLE 1
+#define EKF_JACOBIAN_REUSE_ENABLE 0
 #define EKF_JACOBIAN_RECOMPUTE_INTERVAL 2       // Recompute every N updates (0 disables interval trigger)
 #define EKF_JACOBIAN_INNOVATION_THRESHOLD 10.0f // Recompute when ||y||_2 exceeds this threshold (<= 0 disables threshold trigger)
 #define EKF_JACOBIAN_MAX_REUSE_STREAK 2         // Force recompute after this many reuse-only updates
@@ -105,7 +105,8 @@
 
 // Debugging via Serial
 // Uncomment any of the following lines to enable serial debug output for the corresponding module
-// #define ENABLE_PERFORMANCE_PROFILING 1
+#define ENABLE_PERFORMANCE_PROFILING 1
+#define PERFORMANCE_PRINT_INTERVAL_MS 3000
 // #define _MAIN_SERIAL_DEBUG 1
 // #define _MAIN_SERIAL_PRINT_CORE1_DURATION 1
 // #define _STATE_MACHINE_SERIAL_DEBUG 1

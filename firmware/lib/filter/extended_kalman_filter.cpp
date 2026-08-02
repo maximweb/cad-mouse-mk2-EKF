@@ -323,21 +323,14 @@ void ExtendedKalmanFilter::update(float sensor_readings[9], DipoleModel& dipole_
     }
     PERFORMANCE_END(1, PerformanceProfiler::Section::EKF_SOLVE_IY);
 
-    // Since P is symmetric, P*H^T equals transpose(H*P). Build it from sparse HP blocks.
-    float PH_T[12][9];
-    for (int j = 0; j < 9; ++j) {
-        for (int i = 0; i < 6; ++i) {
-            PH_T[i][j] = HP_pose[j][i];
-            PH_T[i + 6][j] = HP_vel[j][i];
-        }
-    }
-
     // --- 3. STATE UPDATE ---
     PERFORMANCE_BEGIN(1, PerformanceProfiler::Section::EKF_STATE_CORRECTION);
     for (int i = 0; i < 12; ++i) {
         float correction = 0.0f;
-        for (int j = 0; j < 9; ++j)
-            correction += PH_T[i][j] * iY[j];
+        for (int j = 0; j < 9; ++j) {
+            const float ph_t_ij = (i < 6) ? HP_pose[j][i] : HP_vel[j][i - 6];
+            correction += ph_t_ij * iY[j];
+        }
 
         if (std::isfinite(correction)) {
             m_x[i] += correction;
@@ -347,14 +340,18 @@ void ExtendedKalmanFilter::update(float sensor_readings[9], DipoleModel& dipole_
 
     // --- 4. UPDATE COVARIANCE MATRIX ---
     PERFORMANCE_BEGIN(1, PerformanceProfiler::Section::EKF_COVARIANCE_UPDATE);
+    float K_row[9];
+    float row_temp[9];
     for (int row = 0; row < 12; ++row) {
-        float K_row[9] = {0};
-        float row_temp[9] = {0};
+        std::memset(K_row, 0, sizeof(K_row));
+        std::memset(row_temp, 0, sizeof(row_temp));
+
         for (int i = 0; i < 9; i++) {
             float sum = 0;
             for (int k = 0; k < i; k++)
                 sum += L[i][k] * row_temp[k];
-            row_temp[i] = (PH_T[row][i] - sum) / L[i][i];
+            const float ph_t_row_i = (row < 6) ? HP_pose[i][row] : HP_vel[i][row - 6];
+            row_temp[i] = (ph_t_row_i - sum) / L[i][i];
         }
         for (int i = 8; i >= 0; i--) {
             float sum = 0;
@@ -365,11 +362,17 @@ void ExtendedKalmanFilter::update(float sensor_readings[9], DipoleModel& dipole_
 
         // Update only upper triangle and mirror immediately to preserve symmetry.
         for (int col = row; col < 12; ++col) {
-            float delta = 0.0f;
-            for (int k = 0; k < 9; ++k) {
-                const float hp_k_col = (col < 6) ? HP_pose[k][col] : HP_vel[k][col - 6];
-                delta += K_row[k] * hp_k_col;
-            }
+            const float hp0 = (col < 6) ? HP_pose[0][col] : HP_vel[0][col - 6];
+            const float hp1 = (col < 6) ? HP_pose[1][col] : HP_vel[1][col - 6];
+            const float hp2 = (col < 6) ? HP_pose[2][col] : HP_vel[2][col - 6];
+            const float hp3 = (col < 6) ? HP_pose[3][col] : HP_vel[3][col - 6];
+            const float hp4 = (col < 6) ? HP_pose[4][col] : HP_vel[4][col - 6];
+            const float hp5 = (col < 6) ? HP_pose[5][col] : HP_vel[5][col - 6];
+            const float hp6 = (col < 6) ? HP_pose[6][col] : HP_vel[6][col - 6];
+            const float hp7 = (col < 6) ? HP_pose[7][col] : HP_vel[7][col - 6];
+            const float hp8 = (col < 6) ? HP_pose[8][col] : HP_vel[8][col - 6];
+
+            const float delta = K_row[0] * hp0 + K_row[1] * hp1 + K_row[2] * hp2 + K_row[3] * hp3 + K_row[4] * hp4 + K_row[5] * hp5 + K_row[6] * hp6 + K_row[7] * hp7 + K_row[8] * hp8;
 
             float updated = m_P[row][col] - delta;
             if (!std::isfinite(updated)) {
