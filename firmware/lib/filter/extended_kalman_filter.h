@@ -4,9 +4,6 @@
 
 #include "dipole_model.h"
 
-// Uncomment the following line to enable serial debug output for the DipoleModel class
-// #define _KALMAN_FILTER_SERIAL_DEBUG 1
-
 class ExtendedKalmanFilter {
 public:
     ExtendedKalmanFilter();

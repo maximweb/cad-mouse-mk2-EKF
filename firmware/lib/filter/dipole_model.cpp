@@ -3,6 +3,22 @@
 #include "dipole_model.h"
 #include "performance_profiler.h"
 
+#if DEBUG_DIPOLE_MODEL_SERIAL
+#define DIPOLE_LOG_PRINT(...) Serial.print(__VA_ARGS__)
+#define DIPOLE_LOG_PRINTLN(...) Serial.println(__VA_ARGS__)
+#define DIPOLE_LOG_PRINTF(...) Serial.printf(__VA_ARGS__)
+#else
+#define DIPOLE_LOG_PRINT(...) \
+    do {                    \
+    } while (0)
+#define DIPOLE_LOG_PRINTLN(...) \
+    do {                      \
+    } while (0)
+#define DIPOLE_LOG_PRINTF(...) \
+    do {                     \
+    } while (0)
+#endif
+
 DipoleModel::DipoleModel()
 : m_scaled_magnetic_moments{
     m_mu0_over_4pi * m_magnetic_moments[0],
@@ -53,15 +69,12 @@ void DipoleModel::get_expected_readings(float x, float y, float z, float rx, flo
     ry += m_offsets[4];
     rz += m_offsets[5];
 
-// TODO Serial print m_magnetic_moment and m_scaled_magnetic_moment and m_mu0_over_4pi
-#ifdef _DIPOLE_MODEL_SERIAL_DEBUG
-    Serial.print("μ_0 / (4 * pi): ");
-    Serial.printf("%.6e\n", m_mu0_over_4pi);
-    Serial.print("Magnetic moments: ");
-    Serial.printf("%.6e, %.6e, %.6e\n", m_magnetic_moments[0], m_magnetic_moments[1], m_magnetic_moments[2]);
-    Serial.print("Scaled magnetic moments: ");
-    Serial.printf("%.6e, %.6e, %.6e\n", m_scaled_magnetic_moments[0], m_scaled_magnetic_moments[1], m_scaled_magnetic_moments[2]);
-#endif
+    DIPOLE_LOG_PRINT("μ_0 / (4 * pi): ");
+    DIPOLE_LOG_PRINTF("%.6e\n", m_mu0_over_4pi);
+    DIPOLE_LOG_PRINT("Magnetic moments: ");
+    DIPOLE_LOG_PRINTF("%.6e, %.6e, %.6e\n", m_magnetic_moments[0], m_magnetic_moments[1], m_magnetic_moments[2]);
+    DIPOLE_LOG_PRINT("Scaled magnetic moments: ");
+    DIPOLE_LOG_PRINTF("%.6e, %.6e, %.6e\n", m_scaled_magnetic_moments[0], m_scaled_magnetic_moments[1], m_scaled_magnetic_moments[2]);
 
     // Precompute sin and cos for rotation angles
     PERFORMANCE_BEGIN(1, PerformanceProfiler::Section::DIPOLE_ROTATION);
@@ -85,15 +98,14 @@ void DipoleModel::get_expected_readings(float x, float y, float z, float rx, flo
     R[2][2] = cx * cy;
     PERFORMANCE_END(1, PerformanceProfiler::Section::DIPOLE_ROTATION);
 
-    // TODO Test print rotation matrix R
-#ifdef _DIPOLE_MODEL_SERIAL_DEBUG
-    Serial.println("Rotation matrix R:");
+#if DEBUG_DIPOLE_MODEL_SERIAL
+    DIPOLE_LOG_PRINTLN("Rotation matrix R:");
     for (int i = 0; i < 3; ++i) {
         for (int j = 0; j < 3; ++j) {
-            Serial.print(R[i][j], 6);
-            Serial.print(" ");
+            DIPOLE_LOG_PRINT(R[i][j], 6);
+            DIPOLE_LOG_PRINT(" ");
         }
-        Serial.println();
+        DIPOLE_LOG_PRINTLN();
     }
 #endif
 
@@ -102,15 +114,12 @@ void DipoleModel::get_expected_readings(float x, float y, float z, float rx, flo
     float dipole_y = R[1][2];
     float dipole_z = R[2][2];
 
-    // TODO Test print dipole direction
-#ifdef _DIPOLE_MODEL_SERIAL_DEBUG
-    Serial.print("Dipole direction: ");
-    Serial.print(dipole_x, 6);
-    Serial.print(", ");
-    Serial.print(dipole_y, 6);
-    Serial.print(", ");
-    Serial.println(dipole_z, 6);
-#endif
+    DIPOLE_LOG_PRINT("Dipole direction: ");
+    DIPOLE_LOG_PRINT(dipole_x, 6);
+    DIPOLE_LOG_PRINT(", ");
+    DIPOLE_LOG_PRINT(dipole_y, 6);
+    DIPOLE_LOG_PRINT(", ");
+    DIPOLE_LOG_PRINTLN(dipole_z, 6);
 
     // Clear output matrix
     for (int i = 0; i < 9; ++i) {
@@ -125,17 +134,14 @@ void DipoleModel::get_expected_readings(float x, float y, float z, float rx, flo
         float magnet_y = R[1][0] * m_magnet_neutral_positions[i_magnet][0] + R[1][1] * m_magnet_neutral_positions[i_magnet][1] + R[1][2] * m_magnet_neutral_positions[i_magnet][2] + y;
         float magnet_z = R[2][0] * m_magnet_neutral_positions[i_magnet][0] + R[2][1] * m_magnet_neutral_positions[i_magnet][1] + R[2][2] * m_magnet_neutral_positions[i_magnet][2] + z;
 
-        // TODO Test print magnet position
-#ifdef _DIPOLE_MODEL_SERIAL_DEBUG
-        Serial.print("Magnet ");
-        Serial.print(i_magnet);
-        Serial.print(" position: ");
-        Serial.print(magnet_x, 6);
-        Serial.print(", ");
-        Serial.print(magnet_y, 6);
-        Serial.print(", ");
-        Serial.println(magnet_z, 6);
-#endif
+        DIPOLE_LOG_PRINT("Magnet ");
+        DIPOLE_LOG_PRINT(i_magnet);
+        DIPOLE_LOG_PRINT(" position: ");
+        DIPOLE_LOG_PRINT(magnet_x, 6);
+        DIPOLE_LOG_PRINT(", ");
+        DIPOLE_LOG_PRINT(magnet_y, 6);
+        DIPOLE_LOG_PRINT(", ");
+        DIPOLE_LOG_PRINTLN(magnet_z, 6);
 
         // Calculate the expected readings for each sensor
         for (int i_sensor = 0; i_sensor < 3; ++i_sensor) {
@@ -144,66 +150,50 @@ void DipoleModel::get_expected_readings(float x, float y, float z, float rx, flo
             float r_y = (m_sensor_positions[i_sensor][1] - magnet_y); // in mm
             float r_z = (m_sensor_positions[i_sensor][2] - magnet_z); // in mm
 
-            // TODO Test print distance vector r
-#ifdef _DIPOLE_MODEL_SERIAL_DEBUG
-            Serial.print("Sensor ");
-            Serial.print(i_sensor);
-            Serial.print(" distance vector r in mm: ");
-            Serial.print(r_x, 6);
-            Serial.print(", ");
-            Serial.print(r_y, 6);
-            Serial.print(", ");
-            Serial.println(r_z, 6);
-#endif
+            DIPOLE_LOG_PRINT("Sensor ");
+            DIPOLE_LOG_PRINT(i_sensor);
+            DIPOLE_LOG_PRINT(" distance vector r in mm: ");
+            DIPOLE_LOG_PRINT(r_x, 6);
+            DIPOLE_LOG_PRINT(", ");
+            DIPOLE_LOG_PRINT(r_y, 6);
+            DIPOLE_LOG_PRINT(", ");
+            DIPOLE_LOG_PRINTLN(r_z, 6);
 
             // Preocmpute r^2 and r_norm
             float r2 = r_x * r_x + r_y * r_y + r_z * r_z; // in mm^2
             float r_norm = sqrtf(r2);                     // in mm
 
-            // TODO Test print r^2 and r_norm
-#ifdef _DIPOLE_MODEL_SERIAL_DEBUG
-            Serial.print("Sensor ");
-            Serial.print(i_sensor);
-            Serial.print(" r^2 in mm^2: ");
-            Serial.printf("%.6e", r2);
-            Serial.print(", r_norm in mm: ");
-            Serial.printf("%.6e\n", r_norm);
-#endif
+            DIPOLE_LOG_PRINT("Sensor ");
+            DIPOLE_LOG_PRINT(i_sensor);
+            DIPOLE_LOG_PRINT(" r^2 in mm^2: ");
+            DIPOLE_LOG_PRINTF("%.6e", r2);
+            DIPOLE_LOG_PRINT(", r_norm in mm: ");
+            DIPOLE_LOG_PRINTF("%.6e\n", r_norm);
 
             // Bailout for small r_norm to avoid division by zero
             if (r_norm < 1e-6f) {
-#ifdef _DIPOLE_MODEL_SERIAL_DEBUG
-                Serial.print("Warning: r_norm is too small (");
-                Serial.print(r_norm);
-                Serial.println("). Skipping this sensor-magnet pair to avoid division by zero.");
-#endif
+                DIPOLE_LOG_PRINT("Warning: r_norm is too small (");
+                DIPOLE_LOG_PRINT(r_norm);
+                DIPOLE_LOG_PRINTLN("). Skipping this sensor-magnet pair to avoid division by zero.");
                 continue;
             }
 
             // TODO: Avoid powf as RP2350 PFU is optimized for multiplication and division, but not for powf.
             float r_pow5_inv = 1.0f / (r2 * r2 * r_norm); // 1/r^5
 
-            // TODO Test print r_pow5_inv
-#ifdef _DIPOLE_MODEL_SERIAL_DEBUG
-            Serial.print("Sensor ");
-            Serial.print(i_sensor);
-            Serial.print(" r_pow5_inv: ");
-            Serial.printf("%.10e\n", r_pow5_inv);
-#endif
+            DIPOLE_LOG_PRINT("Sensor ");
+            DIPOLE_LOG_PRINT(i_sensor);
+            DIPOLE_LOG_PRINT(" r_pow5_inv: ");
+            DIPOLE_LOG_PRINTF("%.10e\n", r_pow5_inv);
 
             // Calculate dot product of dipole direction and r
             float m_dot_r = dipole_x * r_x + dipole_y * r_y + dipole_z * r_z;
-            float m_dot_r_scaled = m_dot_r * m_scaled_magnetic_moments[i_magnet];
-
-            // TODO Test print m_dot_r and m_dot_r_scaled
-#ifdef _DIPOLE_MODEL_SERIAL_DEBUG
-            Serial.print("Sensor ");
-            Serial.print(i_sensor);
-            Serial.print(" m_dot_r: ");
-            Serial.printf("%.10e", m_dot_r);
-            Serial.print(", m_dot_r_scaled: ");
-            Serial.printf("%.10e\n", m_dot_r_scaled);
-#endif
+            DIPOLE_LOG_PRINT("Sensor ");
+            DIPOLE_LOG_PRINT(i_sensor);
+            DIPOLE_LOG_PRINT(" m_dot_r: ");
+            DIPOLE_LOG_PRINTF("%.10e", m_dot_r);
+            DIPOLE_LOG_PRINT(", m_dot_r_scaled: ");
+            DIPOLE_LOG_PRINTF("%.10e\n", m_dot_r * m_scaled_magnetic_moments[i_magnet]);
 
             // Calculate the expected magnetic field vector using the dipole formula
             readings[i_sensor * 3 + 0] += m_scaled_magnetic_moments[i_magnet] * r_pow5_inv * (3.0f * m_dot_r * r_x - dipole_x * r2);
@@ -213,18 +203,17 @@ void DipoleModel::get_expected_readings(float x, float y, float z, float rx, flo
     }
     PERFORMANCE_END(1, PerformanceProfiler::Section::DIPOLE_SUPERPOSITION);
 
-// TODO Test print expected readings
-#ifdef _DIPOLE_MODEL_SERIAL_DEBUG
-    Serial.println("Expected readings (in mT):");
+#if DEBUG_DIPOLE_MODEL_SERIAL
+    DIPOLE_LOG_PRINTLN("Expected readings (in mT):");
     for (int i = 0; i < 3; ++i) {
-        Serial.print("Sensor ");
-        Serial.print(i);
-        Serial.print(": ");
-        Serial.print(readings[i * 3 + 0], 6);
-        Serial.print(", ");
-        Serial.print(readings[i * 3 + 1], 6);
-        Serial.print(", ");
-        Serial.println(readings[i * 3 + 2], 6);
+        DIPOLE_LOG_PRINT("Sensor ");
+        DIPOLE_LOG_PRINT(i);
+        DIPOLE_LOG_PRINT(": ");
+        DIPOLE_LOG_PRINT(readings[i * 3 + 0], 6);
+        DIPOLE_LOG_PRINT(", ");
+        DIPOLE_LOG_PRINT(readings[i * 3 + 1], 6);
+        DIPOLE_LOG_PRINT(", ");
+        DIPOLE_LOG_PRINTLN(readings[i * 3 + 2], 6);
     }
 #endif
 

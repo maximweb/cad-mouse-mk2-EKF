@@ -1,5 +1,17 @@
 #include "state_machine.h"
 
+#if DEBUG_STATE_MACHINE_SERIAL
+#define STATE_LOG_PRINT(...) Serial.print(__VA_ARGS__)
+#define STATE_LOG_PRINTLN(...) Serial.println(__VA_ARGS__)
+#else
+#define STATE_LOG_PRINT(...)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           \
+    do {                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               \
+    } while (0)
+#define STATE_LOG_PRINTLN(...)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         \
+    do {                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               \
+    } while (0)
+#endif
+
 /*
     GENERAL FUNCTIONS
 */
@@ -269,17 +281,13 @@ void StateMachine::handle_CALIBRATE_COMPUTE()
 bool StateMachine::change_state(State new_state)
 {
     if (new_state != m_state) {
-#ifdef _STATE_MACHINE_SERIAL_DEBUG
-        Serial.print("== State change: ");
-        Serial.print(get_state_name());
-        Serial.print(" -> ");
-#endif
+        STATE_LOG_PRINT("== State change: ");
+        STATE_LOG_PRINT(get_state_name());
+        STATE_LOG_PRINT(" -> ");
 
         m_state = new_state;
 
-#ifdef _STATE_MACHINE_SERIAL_DEBUG
-        Serial.println(get_state_name());
-#endif
+        STATE_LOG_PRINTLN(get_state_name());
 
         m_last_state_change_time_ms = millis();
 

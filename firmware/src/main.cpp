@@ -13,8 +13,40 @@
 #include "performance_profiler.h"
 #include "state_machine.h"
 
-#ifdef _MAIN_SERIAL_DEBUG
+#if DEBUG_MAIN_SERIAL
 #include "helpers.h"
+#endif
+
+#if DEBUG_MAIN_SERIAL
+#define MAIN_LOG_PRINT(...) Serial.print(__VA_ARGS__)
+#define MAIN_LOG_PRINTLN(...) Serial.println(__VA_ARGS__)
+#define MAIN_LOG_PRINTF(...) Serial.printf(__VA_ARGS__)
+#else
+#define MAIN_LOG_PRINT(...) \
+    do {                  \
+    } while (0)
+#define MAIN_LOG_PRINTLN(...) \
+    do {                    \
+    } while (0)
+#define MAIN_LOG_PRINTF(...) \
+    do {                   \
+    } while (0)
+#endif
+
+#if DEBUG_MAIN_PRINT_CORE1_DURATION || DEBUG_MAIN_SERIAL
+#define MAIN_TIMING_LOG_PRINT(...) Serial.print(__VA_ARGS__)
+#define MAIN_TIMING_LOG_PRINTLN(...) Serial.println(__VA_ARGS__)
+#define MAIN_TIMING_LOG_PRINTF(...) Serial.printf(__VA_ARGS__)
+#else
+#define MAIN_TIMING_LOG_PRINT(...) \
+    do {                         \
+    } while (0)
+#define MAIN_TIMING_LOG_PRINTLN(...) \
+    do {                           \
+    } while (0)
+#define MAIN_TIMING_LOG_PRINTF(...) \
+    do {                          \
+    } while (0)
 #endif
 
 /*
@@ -182,7 +214,7 @@ void loop()
         case StateMachine::State::CHECK_SENSORS: {
             // Check if the hall sensors are delivering valid data
             sensor_status = hallController.read(rawSensorData);
-#ifdef _MAIN_SERIAL_DEBUG
+#if DEBUG_MAIN_SERIAL
             Helpers::print_raw_sensor_data(rawSensorData);
 #endif
 
@@ -296,16 +328,14 @@ void loop()
                 latest_estimated_state[10] = local_filtered.vry;
                 latest_estimated_state[11] = local_filtered.vrz;
 
-#if defined(_MAIN_SERIAL_PRINT_CORE1_DURATION) || defined(_MAIN_SERIAL_DEBUG)
                 // Print roundtrip time between consecutive readings->filtering->return
                 // Implies frequency of HID updates must be less than this
                 float dt_ms = local_filtered.dt * 1e3;
-                Serial.print("Filter DT: ");
-                Serial.printf("%.3f", dt_ms);
-                Serial.println(" ms");
-#endif
+                MAIN_TIMING_LOG_PRINT("Filter DT: ");
+                MAIN_TIMING_LOG_PRINTF("%.3f", dt_ms);
+                MAIN_TIMING_LOG_PRINTLN(" ms");
 
-#ifdef _MAIN_SERIAL_DEBUG
+#if DEBUG_MAIN_SERIAL
                 // Print the latest estimated state for debugging
                 Helpers::print_estimated_state(latest_estimated_state);
                 // Condensed print for debugging
@@ -388,27 +418,19 @@ void loop()
     ButtonController::ButtonState right_button_state = buttonController.getRightButtonState();
 
     if (left_button_state == ButtonController::ButtonState::PRESSED) {
-#ifdef _MAIN_SERIAL_DEBUG
-        Serial.println("Left button pressed");
-#endif
+        MAIN_LOG_PRINTLN("Left button pressed");
         buttons |= 0x0001; // Set bit 0 for left button press
     }
     else if (left_button_state == ButtonController::ButtonState::RELEASED) {
-#ifdef _MAIN_SERIAL_DEBUG
-        Serial.println("Left button released");
-#endif
+        MAIN_LOG_PRINTLN("Left button released");
         buttons &= ~0x0001; // Clear bit 0 for left button release
     }
     if (right_button_state == ButtonController::ButtonState::PRESSED) {
-#ifdef _MAIN_SERIAL_DEBUG
-        Serial.println("Right button pressed");
-#endif
+        MAIN_LOG_PRINTLN("Right button pressed");
         buttons |= 0x0002; // Set bit 1 for right button press
     }
     else if (right_button_state == ButtonController::ButtonState::RELEASED) {
-#ifdef _MAIN_SERIAL_DEBUG
-        Serial.println("Right button released");
-#endif
+        MAIN_LOG_PRINTLN("Right button released");
         buttons &= ~0x0002; // Clear bit 1 for right button release
     }
     hidController.task();

@@ -3,6 +3,22 @@
 #include "dipole_model.h"
 #include <LittleFS.h>
 
+#if DEBUG_CALIBRATION_SERIAL
+#define CAL_LOG_PRINT(...) Serial.print(__VA_ARGS__)
+#define CAL_LOG_PRINTLN(...) Serial.println(__VA_ARGS__)
+#define CAL_LOG_PRINTF(...) Serial.printf(__VA_ARGS__)
+#else
+#define CAL_LOG_PRINT(...)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             \
+    do {                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               \
+    } while (0)
+#define CAL_LOG_PRINTLN(...)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           \
+    do {                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               \
+    } while (0)
+#define CAL_LOG_PRINTF(...)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            \
+    do {                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               \
+    } while (0)
+#endif
+
 static struct {
     float sum[9] = {0};
     float sq_sum[9] = {0};
@@ -126,11 +142,11 @@ void Calibration::solve_least_squares(float* params, int N, const float* target_
             r[i] = target_readings[i] - current_B[i];
 
         // Calculate and print SSR
-#ifdef _CALIBRATION_SERIAL_DEBUG
+#if DEBUG_CALIBRATION_SERIAL
         float total_res = 0;
         for (int i = 0; i < 9; i++)
             total_res += (r[i] * r[i]);
-        Serial.printf("Iter %d, Total Error: %.4f\n", iter, total_res);
+        CAL_LOG_PRINTF("Iter %d, Total Error: %.4f\n", iter, total_res);
 #endif
 
         // 1. Calculate Jacobian (9xN)
@@ -221,14 +237,14 @@ bool Calibration::compute_calibration(float magnetic_moments[3], float offsets[6
     calibrationModel.set_magnetic_moments(old_magnetic_moments);
     // Note: Not setting offsets yet, assuming all-zero for first stage of calibration.
 
-#ifdef _CALIBRATION_SERIAL_DEBUG
-    Serial.print("Old magnetic moments: ");
+#if DEBUG_CALIBRATION_SERIAL
+    CAL_LOG_PRINT("Old magnetic moments: ");
     for (int i = 0; i < 3; ++i) {
-        Serial.print(old_magnetic_moments[i], 6);
+        CAL_LOG_PRINT(old_magnetic_moments[i], 6);
         if (i < 2)
-            Serial.print(", ");
+            CAL_LOG_PRINT(", ");
     }
-    Serial.println();
+    CAL_LOG_PRINTLN();
 #endif
 
     // Bounded least squares optimization to refine magnetic_moments
@@ -237,14 +253,14 @@ bool Calibration::compute_calibration(float magnetic_moments[3], float offsets[6
     float fitted_magnetic_moments[3] = {old_magnetic_moments[0], old_magnetic_moments[1], old_magnetic_moments[2]};
     solve_least_squares(fitted_magnetic_moments, 3, means, calibrationModel, get_model_func_moments, min_bounds, max_bounds);
 
-#ifdef _CALIBRATION_SERIAL_DEBUG
-    Serial.print("Fitted magnetic moments: ");
+#if DEBUG_CALIBRATION_SERIAL
+    CAL_LOG_PRINT("Fitted magnetic moments: ");
     for (int i = 0; i < 3; ++i) {
-        Serial.print(fitted_magnetic_moments[i], 6);
+        CAL_LOG_PRINT(fitted_magnetic_moments[i], 6);
         if (i < 2)
-            Serial.print(", ");
+            CAL_LOG_PRINT(", ");
     }
-    Serial.println();
+    CAL_LOG_PRINTLN();
 #endif
 
     // Set the optimized magnetic moments to calibrationModel.
@@ -271,14 +287,14 @@ bool Calibration::compute_calibration(float magnetic_moments[3], float offsets[6
     float fitted_offsets[6] = {0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f}; // Start with zero offsets
     solve_least_squares(fitted_offsets, 6, means, calibrationModel, get_model_func_offsets, min_bounds_offsets, max_bounds_offsets);
 
-#ifdef _CALIBRATION_SERIAL_DEBUG
-    Serial.print("Fitted offsets: ");
+#if DEBUG_CALIBRATION_SERIAL
+    CAL_LOG_PRINT("Fitted offsets: ");
     for (int i = 0; i < 6; ++i) {
-        Serial.print(fitted_offsets[i], 6);
+        CAL_LOG_PRINT(fitted_offsets[i], 6);
         if (i < 5)
-            Serial.print(", ");
+            CAL_LOG_PRINT(", ");
     }
-    Serial.println();
+    CAL_LOG_PRINTLN();
 #endif
 
     /*
@@ -291,14 +307,14 @@ bool Calibration::compute_calibration(float magnetic_moments[3], float offsets[6
     calibrationModel.set_offsets(fitted_offsets);
     solve_least_squares(fitted_magnetic_moments, 3, means, calibrationModel, get_model_func_moments, min_bounds, max_bounds);
 
-#ifdef _CALIBRATION_SERIAL_DEBUG
-    Serial.print("Refined magnetic moments after offsets fitting: ");
+#if DEBUG_CALIBRATION_SERIAL
+    CAL_LOG_PRINT("Refined magnetic moments after offsets fitting: ");
     for (int i = 0; i < 3; ++i) {
-        Serial.print(fitted_magnetic_moments[i], 6);
+        CAL_LOG_PRINT(fitted_magnetic_moments[i], 6);
         if (i < 2)
-            Serial.print(", ");
+            CAL_LOG_PRINT(", ");
     }
-    Serial.println();
+    CAL_LOG_PRINTLN();
 #endif
 
     // Error check: If the refined magnetic moments are out of bounds, or too small
@@ -345,14 +361,14 @@ bool Calibration::compute_calibration(float magnetic_moments[3], float offsets[6
     calibrationModel.set_magnetic_moments(fitted_magnetic_moments);
     solve_least_squares(fitted_offsets, 6, means, calibrationModel, get_model_func_offsets, min_bounds_offsets, max_bounds_offsets);
 
-#ifdef _CALIBRATION_SERIAL_DEBUG
-    Serial.print("Refined offsets after magnetic moments fitting: ");
+#if DEBUG_CALIBRATION_SERIAL
+    CAL_LOG_PRINT("Refined offsets after magnetic moments fitting: ");
     for (int i = 0; i < 6; ++i) {
-        Serial.print(fitted_offsets[i], 6);
+        CAL_LOG_PRINT(fitted_offsets[i], 6);
         if (i < 5)
-            Serial.print(", ");
+            CAL_LOG_PRINT(", ");
     }
-    Serial.println();
+    CAL_LOG_PRINTLN();
 #endif
 
     // Final error check: If the refined offsets are out of bounds
@@ -400,24 +416,16 @@ bool Calibration::compute_calibration(float magnetic_moments[3], float offsets[6
 bool Calibration::initialize_filesystem()
 {
     if (!LittleFS.begin()) {
-#ifdef _CALIBRATION_SERIAL_DEBUG
         Serial.println("Failed to mount LittleFS, attempting to format...");
-#endif
         if (LittleFS.format()) {
-#ifdef _CALIBRATION_SERIAL_DEBUG
-            Serial.println("LittleFS formatted successfully.");
-#endif
+            CAL_LOG_PRINTLN("LittleFS formatted successfully.");
         }
         else {
-#ifdef _CALIBRATION_SERIAL_DEBUG
             Serial.println("Failed to format LittleFS.");
-#endif
             return false;
         }
         if (!LittleFS.begin()) {
-#ifdef _CALIBRATION_SERIAL_DEBUG
             Serial.println("Failed to mount LittleFS after formatting");
-#endif
             return false;
         }
     }
@@ -428,9 +436,7 @@ bool Calibration::save_calibration_data(const CalibrationData& data)
 {
     File file = LittleFS.open("/calibration.bin", "w");
     if (!file) {
-#ifdef _CALIBRATION_SERIAL_DEBUG
         Serial.println("Failed to open calibration data file for writing");
-#endif
         return false;
     }
 
@@ -440,9 +446,7 @@ bool Calibration::save_calibration_data(const CalibrationData& data)
     file.close();
 
     if (written != sizeof(CalibrationData)) {
-#ifdef _CALIBRATION_SERIAL_DEBUG
         Serial.println("Failed to write complete calibration data");
-#endif
         return false;
     }
 
@@ -453,9 +457,7 @@ bool Calibration::load_calibration_data(CalibrationData& data)
 {
     File file = LittleFS.open("/calibration.bin", "r");
     if (!file) {
-#ifdef _CALIBRATION_SERIAL_DEBUG
         Serial.println("Failed to open calibration data file for reading");
-#endif
         return false;
     }
 
@@ -463,9 +465,7 @@ bool Calibration::load_calibration_data(CalibrationData& data)
     file.close();
 
     if (read != sizeof(CalibrationData)) {
-#ifdef _CALIBRATION_SERIAL_DEBUG
         Serial.println("Failed to read complete calibration data");
-#endif
         return false;
     }
 
@@ -476,9 +476,7 @@ bool Calibration::delete_calibration_data()
 {
     if (LittleFS.exists("/calibration.bin")) {
         if (!LittleFS.remove("/calibration.bin")) {
-#ifdef _CALIBRATION_SERIAL_DEBUG
             Serial.println("Failed to delete calibration data file");
-#endif
             return false;
         }
     }

@@ -4,6 +4,18 @@
 #include <cmath>
 #include <cstring>
 
+#if DEBUG_KALMAN_FILTER_SERIAL
+#define EKF_LOG_PRINT(...) Serial.print(__VA_ARGS__)
+#define EKF_LOG_PRINTLN(...) Serial.println(__VA_ARGS__)
+#else
+#define EKF_LOG_PRINT(...)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             \
+    do {                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               \
+    } while (0)
+#define EKF_LOG_PRINTLN(...)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           \
+    do {                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               \
+    } while (0)
+#endif
+
 ExtendedKalmanFilter::ExtendedKalmanFilter() {}
 
 void ExtendedKalmanFilter::init(const float initial_state[6], float process_noise_std, float sensor_noise_std)
@@ -191,12 +203,10 @@ void ExtendedKalmanFilter::update(float sensor_readings[9], DipoleModel& dipole_
 
     float (*H)[12] = m_cached_H;
 
-#ifdef _KALMAN_FILTER_SERIAL_DEBUG
-    Serial.print("[DEBUG] Residual Y[0]: ");
-    Serial.print(y[0]);
-    Serial.print(" | h_x[0]: ");
-    Serial.println(h_x[0]);
-#endif
+    EKF_LOG_PRINT("[DEBUG] Residual Y[0]: ");
+    EKF_LOG_PRINT(y[0]);
+    EKF_LOG_PRINT(" | h_x[0]: ");
+    EKF_LOG_PRINTLN(h_x[0]);
 
     // Measurement model depends only on pose states (0..5), so H = [H_pose, 0].
     // Keep H*P in one contiguous block to avoid branchy pose/vel access in hot paths.
@@ -261,12 +271,10 @@ void ExtendedKalmanFilter::update(float sensor_readings[9], DipoleModel& dipole_
     }
     PERFORMANCE_END(1, PerformanceProfiler::Section::EKF_CHOLESKY);
 
-#ifdef _KALMAN_FILTER_SERIAL_DEBUG
-    Serial.print("[DEBUG] Matrix S Diagonal [0]: ");
-    Serial.print(S[0][0]);
-    Serial.print(" | L Diagonal [0]: ");
-    Serial.println(L[0][0]);
-#endif
+    EKF_LOG_PRINT("[DEBUG] Matrix S Diagonal [0]: ");
+    EKF_LOG_PRINT(S[0][0]);
+    EKF_LOG_PRINT(" | L Diagonal [0]: ");
+    EKF_LOG_PRINTLN(L[0][0]);
 
     // --- 2. SOLVE S * iY = y ---
     PERFORMANCE_BEGIN(1, PerformanceProfiler::Section::EKF_SOLVE_IY);

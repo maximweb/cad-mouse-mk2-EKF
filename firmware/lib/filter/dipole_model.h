@@ -4,9 +4,6 @@
 
 #include <Arduino.h>
 
-// Uncomment the following line to enable serial debug output for the DipoleModel class
-// #define _DIPOLE_MODEL_SERIAL_DEBUG 1
-
 class DipoleModel {
 public:
     DipoleModel(); // magnetic moments in A*m^2

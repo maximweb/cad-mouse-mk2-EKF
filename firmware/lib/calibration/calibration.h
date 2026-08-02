@@ -6,9 +6,6 @@
 
 class DipoleModel;
 
-// Uncomment the following line to enable serial debug output for the Calibration class
-// #define _CALIBRATION_SERIAL_DEBUG 1
-
 struct CalibrationData {
     float magnetic_moments[3]; // Magnetic moments for each of the three magnets
     float offsets[6];          // Offsets for x, y, z, rx, ry, rz

@@ -6,9 +6,6 @@
 #include "dipole_model.h"
 #include "led_controller.h"
 
-// Uncomment the following line to enable serial debug output for the StateMachine class
-// #define _STATE_MACHINE_SERIAL_DEBUG 1
-
 class StateMachine {
 public:
     enum class State {
