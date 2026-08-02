@@ -55,6 +55,11 @@
 #define EKF_JACOBIAN_INNOVATION_THRESHOLD 10.0f // Recompute when ||y||_2 exceeds this threshold (<= 0 disables threshold trigger)
 #define EKF_JACOBIAN_MAX_REUSE_STREAK 2         // Force recompute after this many reuse-only updates
 
+// Jacobian computation mode
+// 0: Fully numeric finite differences
+// 1: Hybrid (analytic translation dB/dx,dB/dy,dB/dz + numeric rotation dB/drx,dB/dry,dB/drz)
+#define EKF_JACOBIAN_MODE 1
+
 // Normalization, Deadzone, and Isolation
 #define NORMALIZATION_X_MAX 1.7f  // Maximum translation in mm for normalization
 #define NORMALIZATION_Y_MAX 1.7f  // Maximum translation in mm for normalization

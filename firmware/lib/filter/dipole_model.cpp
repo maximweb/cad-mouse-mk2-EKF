@@ -230,3 +230,110 @@ void DipoleModel::get_expected_readings(float x, float y, float z, float rx, flo
 
     PERFORMANCE_END(1, PerformanceProfiler::Section::DIPOLE_TOTAL);
 }
+
+void DipoleModel::get_expected_readings_with_translation_jacobian(float x, float y, float z, float rx, float ry, float rz, float readings[9], float d_readings_d_xyz[9][3])
+{
+    PERFORMANCE_BEGIN(1, PerformanceProfiler::Section::DIPOLE_TOTAL);
+
+    x += m_offsets[0];
+    y += m_offsets[1];
+    z += m_offsets[2];
+    rx += m_offsets[3];
+    ry += m_offsets[4];
+    rz += m_offsets[5];
+
+    PERFORMANCE_BEGIN(1, PerformanceProfiler::Section::DIPOLE_ROTATION);
+    float cx = cosf(rx);
+    float sx = sinf(rx);
+    float cy = cosf(ry);
+    float sy = sinf(ry);
+    float cz = cosf(rz);
+    float sz = sinf(rz);
+
+    float R[3][3];
+    R[0][0] = cy * cz;
+    R[0][1] = sx * sy * cz - cx * sz;
+    R[0][2] = cx * sy * cz + sx * sz;
+    R[1][0] = cy * sz;
+    R[1][1] = sx * sy * sz + cx * cz;
+    R[1][2] = cx * sy * sz - sx * cz;
+    R[2][0] = -sy;
+    R[2][1] = sx * cy;
+    R[2][2] = cx * cy;
+    PERFORMANCE_END(1, PerformanceProfiler::Section::DIPOLE_ROTATION);
+
+    const float dipole_x = R[0][2];
+    const float dipole_y = R[1][2];
+    const float dipole_z = R[2][2];
+
+    for (int i = 0; i < 9; ++i) {
+        readings[i] = 0.0f;
+        d_readings_d_xyz[i][0] = 0.0f;
+        d_readings_d_xyz[i][1] = 0.0f;
+        d_readings_d_xyz[i][2] = 0.0f;
+    }
+
+    PERFORMANCE_BEGIN(1, PerformanceProfiler::Section::DIPOLE_SUPERPOSITION);
+    for (int i_magnet = 0; i_magnet < 3; ++i_magnet) {
+        const float magnet_x = R[0][0] * m_magnet_neutral_positions[i_magnet][0] + R[0][1] * m_magnet_neutral_positions[i_magnet][1] + R[0][2] * m_magnet_neutral_positions[i_magnet][2] + x;
+        const float magnet_y = R[1][0] * m_magnet_neutral_positions[i_magnet][0] + R[1][1] * m_magnet_neutral_positions[i_magnet][1] + R[1][2] * m_magnet_neutral_positions[i_magnet][2] + y;
+        const float magnet_z = R[2][0] * m_magnet_neutral_positions[i_magnet][0] + R[2][1] * m_magnet_neutral_positions[i_magnet][1] + R[2][2] * m_magnet_neutral_positions[i_magnet][2] + z;
+
+        const float scaled_m = m_scaled_magnetic_moments[i_magnet];
+
+        for (int i_sensor = 0; i_sensor < 3; ++i_sensor) {
+            const float r_x = (m_sensor_positions[i_sensor][0] - magnet_x);
+            const float r_y = (m_sensor_positions[i_sensor][1] - magnet_y);
+            const float r_z = (m_sensor_positions[i_sensor][2] - magnet_z);
+
+            const float r2 = r_x * r_x + r_y * r_y + r_z * r_z;
+            const float r_norm = sqrtf(r2);
+            if (r_norm < 1e-6f) {
+                continue;
+            }
+
+            const float r_pow5_inv = 1.0f / (r2 * r2 * r_norm);
+            const float m_dot_r = dipole_x * r_x + dipole_y * r_y + dipole_z * r_z;
+
+            const float F_x = 3.0f * m_dot_r * r_x - dipole_x * r2;
+            const float F_y = 3.0f * m_dot_r * r_y - dipole_y * r2;
+            const float F_z = 3.0f * m_dot_r * r_z - dipole_z * r2;
+
+            const int base = i_sensor * 3;
+            readings[base + 0] += scaled_m * r_pow5_inv * F_x;
+            readings[base + 1] += scaled_m * r_pow5_inv * F_y;
+            readings[base + 2] += scaled_m * r_pow5_inv * F_z;
+
+            const float r_pow7_inv = r_pow5_inv / r2;
+            const float r_vec[3] = {r_x, r_y, r_z};
+            const float d_vec[3] = {dipole_x, dipole_y, dipole_z};
+            const float F_vec[3] = {F_x, F_y, F_z};
+
+            for (int j = 0; j < 3; ++j) {
+                const float rj = r_vec[j];
+                const float dj = d_vec[j];
+
+                // d(inv_r5)/dr_j
+                const float d_inv_r5_drj = -5.0f * rj * r_pow7_inv;
+
+                // dF/dr_j = 3*(d_j*r + m_dot_r*e_j) - 2*d*r_j
+                const float dF_x_drj = 3.0f * (dj * r_x + (j == 0 ? m_dot_r : 0.0f)) - 2.0f * dipole_x * rj;
+                const float dF_y_drj = 3.0f * (dj * r_y + (j == 1 ? m_dot_r : 0.0f)) - 2.0f * dipole_y * rj;
+                const float dF_z_drj = 3.0f * (dj * r_z + (j == 2 ? m_dot_r : 0.0f)) - 2.0f * dipole_z * rj;
+
+                const float dB_x_drj = scaled_m * (d_inv_r5_drj * F_vec[0] + r_pow5_inv * dF_x_drj);
+                const float dB_y_drj = scaled_m * (d_inv_r5_drj * F_vec[1] + r_pow5_inv * dF_y_drj);
+                const float dB_z_drj = scaled_m * (d_inv_r5_drj * F_vec[2] + r_pow5_inv * dF_z_drj);
+
+                // r = sensor - magnet and magnet_{x,y,z} includes translation directly.
+                // Therefore dr_j/dt_j = -1 and dB/dt_j = -dB/dr_j.
+                d_readings_d_xyz[base + 0][j] += -dB_x_drj;
+                d_readings_d_xyz[base + 1][j] += -dB_y_drj;
+                d_readings_d_xyz[base + 2][j] += -dB_z_drj;
+            }
+        }
+    }
+    PERFORMANCE_END(1, PerformanceProfiler::Section::DIPOLE_SUPERPOSITION);
+
+    PERFORMANCE_END(1, PerformanceProfiler::Section::DIPOLE_TOTAL);
+}

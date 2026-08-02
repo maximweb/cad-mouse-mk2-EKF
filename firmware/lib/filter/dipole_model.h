@@ -15,6 +15,7 @@ public:
     void set_offsets(float offsets[6]); // offsets for x, y, z, rx, ry, rz
     void get_offsets(float offsets[6]);
     void get_expected_readings(float x, float y, float z, float rx, float ry, float rz, float readings[9]);
+    void get_expected_readings_with_translation_jacobian(float x, float y, float z, float rx, float ry, float rz, float readings[9], float d_readings_d_xyz[9][3]);
 
 private:
     // μ_0 / (4 * pi) = 1e-7 T*m/A

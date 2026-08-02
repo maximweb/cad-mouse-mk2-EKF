@@ -97,8 +97,44 @@ void ExtendedKalmanFilter::predict(float dt)
 void ExtendedKalmanFilter::compute_jacobian(const float state[12], float H[9][12], DipoleModel& dipole_model)
 {
     float base_B[9];
-    dipole_model.get_expected_readings(state[0], state[1], state[2], state[3], state[4], state[5], base_B);
     std::memset(H, 0, sizeof(float) * 9 * 12);
+
+#if EKF_JACOBIAN_MODE == 1
+    float d_readings_d_xyz[9][3];
+    dipole_model.get_expected_readings_with_translation_jacobian(state[0], state[1], state[2], state[3], state[4], state[5], base_B, d_readings_d_xyz);
+
+    // Analytic translation columns.
+    for (int i = 0; i < 9; ++i) {
+        H[i][0] = d_readings_d_xyz[i][0];
+        H[i][1] = d_readings_d_xyz[i][1];
+        H[i][2] = d_readings_d_xyz[i][2];
+    }
+
+    // Numeric rotation columns.
+    for (int j = 3; j < 6; ++j) {
+        float perturbed_pose[6] = {state[0], state[1], state[2], state[3], state[4], state[5]};
+
+        float state_val = perturbed_pose[j];
+        if (!std::isfinite(state_val)) {
+            state_val = 0.0f;
+        }
+
+        float h = 1e-4f * std::fabs(state_val);
+        if (h < 1e-4f)
+            h = 1e-4f;
+
+        perturbed_pose[j] = state_val + h;
+
+        float perturbed_B[9];
+        dipole_model.get_expected_readings(perturbed_pose[0], perturbed_pose[1], perturbed_pose[2], perturbed_pose[3], perturbed_pose[4], perturbed_pose[5], perturbed_B);
+
+        for (int i = 0; i < 9; ++i) {
+            float diff = perturbed_B[i] - base_B[i];
+            H[i][j] = std::isfinite(diff) ? (diff / h) : 0.0f;
+        }
+    }
+#else
+    dipole_model.get_expected_readings(state[0], state[1], state[2], state[3], state[4], state[5], base_B);
 
     for (int j = 0; j < 6; ++j) {
         float perturbed_pose[6] = {state[0], state[1], state[2], state[3], state[4], state[5]};
@@ -112,8 +148,6 @@ void ExtendedKalmanFilter::compute_jacobian(const float state[12], float H[9][12
         if (h < 1e-4f)
             h = 1e-4f;
 
-        // FIX: The root cause of the immediate NaN lockup.
-        // We MUST overwrite perturbed_pose[j] entirely to flush out the old NaN.
         perturbed_pose[j] = state_val + h;
 
         float perturbed_B[9];
@@ -124,6 +158,7 @@ void ExtendedKalmanFilter::compute_jacobian(const float state[12], float H[9][12
             H[i][j] = std::isfinite(diff) ? (diff / h) : 0.0f;
         }
     }
+#endif
 }
 
 void ExtendedKalmanFilter::update(float sensor_readings[9], DipoleModel& dipole_model)
