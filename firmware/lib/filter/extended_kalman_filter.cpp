@@ -30,9 +30,6 @@ void ExtendedKalmanFilter::init(const float initial_state[6], float process_nois
     m_Q_ang_vel = 1.0f * process_noise_std;
 
     std::memset(m_cached_H, 0, sizeof(m_cached_H));
-    m_cached_H_valid = false;
-    m_update_counter = 0;
-    m_jacobian_reuse_streak = 0;
 }
 
 void ExtendedKalmanFilter::predict(float dt)
@@ -54,23 +51,28 @@ void ExtendedKalmanFilter::predict(float dt)
         m_x[i] += m_x[i + 6] * dt;
     }
 
-    // 2. Safe, Explicit F * P * F^T matrix propagation
-    float F_P[12][12];
-    for (int i = 0; i < 12; ++i) {
-        for (int j = 0; j < 12; ++j) {
-            if (i < 6)
-                F_P[i][j] = m_P[i][j] + m_P[i + 6][j] * dt;
-            else
-                F_P[i][j] = m_P[i][j];
+    // 2. Block-form F * P * F^T propagation for constant-velocity model.
+    const float dt2 = dt * dt;
+    float A[6][6];
+    float B[6][6];
+    float C[6][6];
+    float D[6][6];
+
+    for (int i = 0; i < 6; ++i) {
+        for (int j = 0; j < 6; ++j) {
+            A[i][j] = m_P[i][j];
+            B[i][j] = m_P[i][j + 6];
+            C[i][j] = m_P[i + 6][j];
+            D[i][j] = m_P[i + 6][j + 6];
         }
     }
 
-    for (int i = 0; i < 12; ++i) {
-        for (int j = 0; j < 12; ++j) {
-            if (j < 6)
-                m_P[i][j] = F_P[i][j] + F_P[i][j + 6] * dt;
-            else
-                m_P[i][j] = F_P[i][j];
+    for (int i = 0; i < 6; ++i) {
+        for (int j = 0; j < 6; ++j) {
+            m_P[i][j] = A[i][j] + dt * (B[i][j] + C[i][j]) + dt2 * D[i][j];
+            m_P[i][j + 6] = B[i][j] + dt * D[i][j];
+            m_P[i + 6][j] = C[i][j] + dt * D[i][j];
+            m_P[i + 6][j + 6] = D[i][j];
         }
     }
 
@@ -172,71 +174,20 @@ void ExtendedKalmanFilter::update(float sensor_readings[9], DipoleModel& dipole_
 
     float h_x[9];
     float y[9];
-    float innovation_norm_sq = 0.0f;
     auto update_innovation = [&]() {
-        innovation_norm_sq = 0.0f;
         for (int i = 0; i < 9; ++i) {
             const float diff = sensor_readings[i] - h_x[i];
             y[i] = std::isfinite(diff) ? diff : 0.0f;
-            innovation_norm_sq += y[i] * y[i];
         }
     };
 
-#if EKF_JACOBIAN_REUSE_ENABLE
-    PERFORMANCE_BEGIN(1, PerformanceProfiler::Section::EKF_MODEL_HX);
-    dipole_model.get_expected_readings(m_x[0], m_x[1], m_x[2], m_x[3], m_x[4], m_x[5], h_x);
-    PERFORMANCE_END(1, PerformanceProfiler::Section::EKF_MODEL_HX);
-    update_innovation();
-#endif
-
-    ++m_update_counter;
-    bool should_recompute_jacobian = !m_cached_H_valid;
-
-#if EKF_JACOBIAN_REUSE_ENABLE
-    if (!should_recompute_jacobian) {
-        if (EKF_JACOBIAN_RECOMPUTE_INTERVAL > 0 && (m_update_counter % EKF_JACOBIAN_RECOMPUTE_INTERVAL) == 0) {
-            should_recompute_jacobian = true;
-        }
-
-        if (!should_recompute_jacobian && EKF_JACOBIAN_INNOVATION_THRESHOLD > 0.0f) {
-            const float innovation_threshold_sq = EKF_JACOBIAN_INNOVATION_THRESHOLD * EKF_JACOBIAN_INNOVATION_THRESHOLD;
-            if (innovation_norm_sq > innovation_threshold_sq) {
-                should_recompute_jacobian = true;
-            }
-        }
-
-        if (!should_recompute_jacobian && m_jacobian_reuse_streak >= EKF_JACOBIAN_MAX_REUSE_STREAK) {
-            should_recompute_jacobian = true;
-        }
-    }
-#else
-    should_recompute_jacobian = true;
-#endif
-
     PERFORMANCE_BEGIN(1, PerformanceProfiler::Section::EKF_JACOBIAN);
-    if (should_recompute_jacobian) {
-        compute_jacobian(m_x,
-                         m_cached_H,
-                         dipole_model,
-#if EKF_JACOBIAN_REUSE_ENABLE
-                         nullptr
-#else
-                         h_x
-#endif
-        );
-        m_cached_H_valid = true;
-        m_jacobian_reuse_streak = 0;
-    }
-    else {
-        ++m_jacobian_reuse_streak;
-    }
+    compute_jacobian(m_x, m_cached_H, dipole_model, h_x);
     PERFORMANCE_END(1, PerformanceProfiler::Section::EKF_JACOBIAN);
 
-#if !EKF_JACOBIAN_REUSE_ENABLE
     PERFORMANCE_BEGIN(1, PerformanceProfiler::Section::EKF_MODEL_HX);
     PERFORMANCE_END(1, PerformanceProfiler::Section::EKF_MODEL_HX);
     update_innovation();
-#endif
 
     float (*H)[12] = m_cached_H;
 
@@ -245,33 +196,24 @@ void ExtendedKalmanFilter::update(float sensor_readings[9], DipoleModel& dipole_
     Serial.print(y[0]);
     Serial.print(" | h_x[0]: ");
     Serial.println(h_x[0]);
-
-    Serial.print("[DEBUG] Jacobian recompute: ");
-    Serial.print(should_recompute_jacobian ? "yes" : "no");
-    Serial.print(" | reuse_streak: ");
-    Serial.println(m_jacobian_reuse_streak);
 #endif
 
     // Measurement model depends only on pose states (0..5), so H = [H_pose, 0].
-    // Exploit this sparsity to reduce multiplications in HP and S.
-    float HP_pose[9][6] = {0}; // columns 0..5 of H*P
-    float HP_vel[9][6] = {0};  // columns 6..11 of H*P
+    // Keep H*P in one contiguous block to avoid branchy pose/vel access in hot paths.
+    float HP_full[9][12] = {0};
     PERFORMANCE_BEGIN(1, PerformanceProfiler::Section::EKF_HP);
     for (int i = 0; i < 9; ++i) {
-        float sum_pose[6] = {0};
-        float sum_vel[6] = {0};
+        float sum_full[12] = {0};
 
         for (int k = 0; k < 6; ++k) {
             const float h_ik = H[i][k];
-            for (int j = 0; j < 6; ++j) {
-                sum_pose[j] += h_ik * m_P[k][j];
-                sum_vel[j] += h_ik * m_P[k][j + 6];
+            for (int j = 0; j < 12; ++j) {
+                sum_full[j] += h_ik * m_P[k][j];
             }
         }
 
-        for (int j = 0; j < 6; ++j) {
-            HP_pose[i][j] = sum_pose[j];
-            HP_vel[i][j] = sum_vel[j];
+        for (int j = 0; j < 12; ++j) {
+            HP_full[i][j] = sum_full[j];
         }
     }
     PERFORMANCE_END(1, PerformanceProfiler::Section::EKF_HP);
@@ -282,7 +224,7 @@ void ExtendedKalmanFilter::update(float sensor_readings[9], DipoleModel& dipole_
         for (int j = i; j < 9; ++j) {
             float sum = 0.0f;
             for (int k = 0; k < 6; ++k) {
-                sum += HP_pose[i][k] * H[j][k];
+                sum += HP_full[i][k] * H[j][k];
             }
             if (i == j) {
                 sum += m_R_var;
@@ -349,8 +291,7 @@ void ExtendedKalmanFilter::update(float sensor_readings[9], DipoleModel& dipole_
     for (int i = 0; i < 12; ++i) {
         float correction = 0.0f;
         for (int j = 0; j < 9; ++j) {
-            const float ph_t_ij = (i < 6) ? HP_pose[j][i] : HP_vel[j][i - 6];
-            correction += ph_t_ij * iY[j];
+            correction += HP_full[j][i] * iY[j];
         }
 
         if (std::isfinite(correction)) {
@@ -361,39 +302,38 @@ void ExtendedKalmanFilter::update(float sensor_readings[9], DipoleModel& dipole_
 
     // --- 4. UPDATE COVARIANCE MATRIX ---
     PERFORMANCE_BEGIN(1, PerformanceProfiler::Section::EKF_COVARIANCE_UPDATE);
-    float K_row[9];
-    float row_temp[9];
+    // Solve all 12 rows of K = (P*H^T)*S^{-1} together for better L reuse.
+    float K[12][9];
+    float Y_tmp[12][9];
+
+    // Forward solve: Y_tmp * L^T = P*H^T  (row-wise RHS)
+    for (int i = 0; i < 9; ++i) {
+        const float lii = (L[i][i] < 1e-5f) ? 1e-5f : L[i][i];
+        for (int row = 0; row < 12; ++row) {
+            float sum = 0.0f;
+            for (int k = 0; k < i; ++k) {
+                sum += L[i][k] * Y_tmp[row][k];
+            }
+            Y_tmp[row][i] = (HP_full[i][row] - sum) / lii;
+        }
+    }
+
+    // Backward solve: K * L = Y_tmp
+    for (int i = 8; i >= 0; --i) {
+        const float lii = (L[i][i] < 1e-5f) ? 1e-5f : L[i][i];
+        for (int row = 0; row < 12; ++row) {
+            float sum = 0.0f;
+            for (int k = i + 1; k < 9; ++k) {
+                sum += L[k][i] * K[row][k];
+            }
+            K[row][i] = (Y_tmp[row][i] - sum) / lii;
+        }
+    }
+
     for (int row = 0; row < 12; ++row) {
-        std::memset(K_row, 0, sizeof(K_row));
-        std::memset(row_temp, 0, sizeof(row_temp));
-
-        for (int i = 0; i < 9; i++) {
-            float sum = 0;
-            for (int k = 0; k < i; k++)
-                sum += L[i][k] * row_temp[k];
-            const float ph_t_row_i = (row < 6) ? HP_pose[i][row] : HP_vel[i][row - 6];
-            row_temp[i] = (ph_t_row_i - sum) / L[i][i];
-        }
-        for (int i = 8; i >= 0; i--) {
-            float sum = 0;
-            for (int k = i + 1; k < 9; k++)
-                sum += L[k][i] * K_row[k];
-            K_row[i] = (row_temp[i] - sum) / L[i][i];
-        }
-
         // Update only upper triangle and mirror immediately to preserve symmetry.
         for (int col = row; col < 12; ++col) {
-            const float hp0 = (col < 6) ? HP_pose[0][col] : HP_vel[0][col - 6];
-            const float hp1 = (col < 6) ? HP_pose[1][col] : HP_vel[1][col - 6];
-            const float hp2 = (col < 6) ? HP_pose[2][col] : HP_vel[2][col - 6];
-            const float hp3 = (col < 6) ? HP_pose[3][col] : HP_vel[3][col - 6];
-            const float hp4 = (col < 6) ? HP_pose[4][col] : HP_vel[4][col - 6];
-            const float hp5 = (col < 6) ? HP_pose[5][col] : HP_vel[5][col - 6];
-            const float hp6 = (col < 6) ? HP_pose[6][col] : HP_vel[6][col - 6];
-            const float hp7 = (col < 6) ? HP_pose[7][col] : HP_vel[7][col - 6];
-            const float hp8 = (col < 6) ? HP_pose[8][col] : HP_vel[8][col - 6];
-
-            const float delta = K_row[0] * hp0 + K_row[1] * hp1 + K_row[2] * hp2 + K_row[3] * hp3 + K_row[4] * hp4 + K_row[5] * hp5 + K_row[6] * hp6 + K_row[7] * hp7 + K_row[8] * hp8;
+            const float delta = K[row][0] * HP_full[0][col] + K[row][1] * HP_full[1][col] + K[row][2] * HP_full[2][col] + K[row][3] * HP_full[3][col] + K[row][4] * HP_full[4][col] + K[row][5] * HP_full[5][col] + K[row][6] * HP_full[6][col] + K[row][7] * HP_full[7][col] + K[row][8] * HP_full[8][col];
 
             float updated = m_P[row][col] - delta;
             if (!std::isfinite(updated)) {
