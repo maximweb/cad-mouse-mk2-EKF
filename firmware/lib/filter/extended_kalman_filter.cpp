@@ -339,8 +339,8 @@ void ExtendedKalmanFilter::update(float sensor_readings[9], DipoleModel& dipole_
 
     // --- 4. UPDATE COVARIANCE MATRIX ---
     PERFORMANCE_BEGIN(1, PerformanceProfiler::Section::EKF_COVARIANCE_UPDATE);
-    float K[12][9] = {0};
     for (int row = 0; row < 12; ++row) {
+        float K_row[9] = {0};
         float row_temp[9] = {0};
         for (int i = 0; i < 9; i++) {
             float sum = 0;
@@ -351,33 +351,32 @@ void ExtendedKalmanFilter::update(float sensor_readings[9], DipoleModel& dipole_
         for (int i = 8; i >= 0; i--) {
             float sum = 0;
             for (int k = i + 1; k < 9; k++)
-                sum += L[k][i] * K[row][k];
-            K[row][i] = (row_temp[i] - sum) / L[i][i];
+                sum += L[k][i] * K_row[k];
+            K_row[i] = (row_temp[i] - sum) / L[i][i];
         }
-    }
 
-    // Direct covariance update without materializing a 12x12 temporary KHP matrix.
-    for (int i = 0; i < 12; ++i) {
-        for (int j = 0; j < 6; ++j) {
-            float delta_pose = 0.0f;
-            float delta_vel = 0.0f;
+        // Update only upper triangle and mirror immediately to preserve symmetry.
+        for (int col = row; col < 12; ++col) {
+            float delta = 0.0f;
             for (int k = 0; k < 9; ++k) {
-                const float k_ik = K[i][k];
-                delta_pose += k_ik * HP_pose[k][j];
-                delta_vel += k_ik * HP_vel[k][j];
+                const float hp_k_col = (col < 6) ? HP_pose[k][col] : HP_vel[k][col - 6];
+                delta += K_row[k] * hp_k_col;
             }
-            m_P[i][j] -= delta_pose;
-            m_P[i][j + 6] -= delta_vel;
+
+            float updated = m_P[row][col] - delta;
+            if (!std::isfinite(updated)) {
+                updated = m_P[row][col];
+            }
+
+            m_P[row][col] = updated;
+            if (col != row) {
+                m_P[col][row] = updated;
+            }
         }
     }
 
-    // FIX: Force Covariance Matrix to stay valid (Symmetric + Positive Diagonals)
+    // Keep covariance numerically valid.
     for (int i = 0; i < 12; ++i) {
-        for (int j = i + 1; j < 12; ++j) {
-            float avg = (m_P[i][j] + m_P[j][i]) * 0.5f;
-            m_P[i][j] = avg;
-            m_P[j][i] = avg;
-        }
         if (m_P[i][i] < 1e-6f) {
             m_P[i][i] = 1e-6f;
         }
