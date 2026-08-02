@@ -94,9 +94,10 @@ void ExtendedKalmanFilter::predict(float dt)
     }
 }
 
-void ExtendedKalmanFilter::compute_jacobian(const float state[12], float H[9][12], DipoleModel& dipole_model)
+void ExtendedKalmanFilter::compute_jacobian(const float state[12], float H[9][12], DipoleModel& dipole_model, float base_readings_out[9])
 {
-    float base_B[9];
+    float local_base_B[9];
+    float* base_B = (base_readings_out != nullptr) ? base_readings_out : local_base_B;
     std::memset(H, 0, sizeof(float) * 9 * 12);
 
 #if EKF_JACOBIAN_MODE == 1
@@ -170,17 +171,11 @@ void ExtendedKalmanFilter::update(float sensor_readings[9], DipoleModel& dipole_
     }
 
     float h_x[9];
+#if EKF_JACOBIAN_REUSE_ENABLE
     PERFORMANCE_BEGIN(1, PerformanceProfiler::Section::EKF_MODEL_HX);
     dipole_model.get_expected_readings(m_x[0], m_x[1], m_x[2], m_x[3], m_x[4], m_x[5], h_x);
     PERFORMANCE_END(1, PerformanceProfiler::Section::EKF_MODEL_HX);
-
-    float y[9];
-    float innovation_norm_sq = 0.0f;
-    for (int i = 0; i < 9; ++i) {
-        float diff = sensor_readings[i] - h_x[i];
-        y[i] = std::isfinite(diff) ? diff : 0.0f;
-        innovation_norm_sq += y[i] * y[i];
-    }
+#endif
 
     ++m_update_counter;
     bool should_recompute_jacobian = !m_cached_H_valid;
@@ -208,7 +203,15 @@ void ExtendedKalmanFilter::update(float sensor_readings[9], DipoleModel& dipole_
 
     PERFORMANCE_BEGIN(1, PerformanceProfiler::Section::EKF_JACOBIAN);
     if (should_recompute_jacobian) {
-        compute_jacobian(m_x, m_cached_H, dipole_model);
+        compute_jacobian(m_x,
+                         m_cached_H,
+                         dipole_model,
+#if EKF_JACOBIAN_REUSE_ENABLE
+                         nullptr
+#else
+                         h_x
+#endif
+        );
         m_cached_H_valid = true;
         m_jacobian_reuse_streak = 0;
     }
@@ -216,6 +219,19 @@ void ExtendedKalmanFilter::update(float sensor_readings[9], DipoleModel& dipole_
         ++m_jacobian_reuse_streak;
     }
     PERFORMANCE_END(1, PerformanceProfiler::Section::EKF_JACOBIAN);
+
+#if !EKF_JACOBIAN_REUSE_ENABLE
+    PERFORMANCE_BEGIN(1, PerformanceProfiler::Section::EKF_MODEL_HX);
+    PERFORMANCE_END(1, PerformanceProfiler::Section::EKF_MODEL_HX);
+#endif
+
+    float y[9];
+    float innovation_norm_sq = 0.0f;
+    for (int i = 0; i < 9; ++i) {
+        float diff = sensor_readings[i] - h_x[i];
+        y[i] = std::isfinite(diff) ? diff : 0.0f;
+        innovation_norm_sq += y[i] * y[i];
+    }
 
     float (*H)[12] = m_cached_H;
 

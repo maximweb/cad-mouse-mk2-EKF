@@ -35,5 +35,5 @@ private:
     uint8_t m_jacobian_reuse_streak = 0;
 
     // Helper function for Jacobian calculation
-    void compute_jacobian(const float state[12], float H[9][12], DipoleModel& dipole_model);
+    void compute_jacobian(const float state[12], float H[9][12], DipoleModel& dipole_model, float base_readings_out[9] = nullptr);
 };
